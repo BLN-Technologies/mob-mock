@@ -1,0 +1,103 @@
+export enum UserRole {
+  SUPPLIER = 'SUPPLIER',
+  FIELD_AGENT = 'FIELD_AGENT',
+  BUYER = 'BUYER',
+  ADMINISTRATOR = 'ADMINISTRATOR',
+}
+
+export enum OrganizationType {
+  SUPPLIER = 'SUPPLIER',
+  BUYER = 'BUYER',
+}
+
+export enum VerificationStatus {
+  PENDING = 'PENDING',
+  VERIFIED = 'VERIFIED',
+  REJECTED = 'REJECTED',
+  SUSPENDED = 'SUSPENDED',
+}
+
+export enum LotStatus {
+  DRAFT = 'DRAFT',
+  SUBMITTED = 'SUBMITTED',
+  VERIFIED = 'VERIFIED',
+  RESERVED = 'RESERVED',
+  SOLD = 'SOLD',
+  REJECTED = 'REJECTED',
+  WITHDRAWN = 'WITHDRAWN',
+  EXPIRED = 'EXPIRED',
+}
+
+export enum OrderStatus {
+  CREATED = 'CREATED',
+  CONFIRMED = 'CONFIRMED',
+  PAYMENT_PENDING = 'PAYMENT_PENDING',
+  PAID = 'PAID',
+  DISPATCHED = 'DISPATCHED',
+  DELIVERED = 'DELIVERED',
+  ACCEPTED = 'ACCEPTED',
+  SETTLED = 'SETTLED',
+  CANCELLED = 'CANCELLED',
+  DISPUTED = 'DISPUTED',
+}
+
+export enum QualityGrade {
+  GRADE_A = 'GRADE_A',
+  GRADE_B = 'GRADE_B',
+  GRADE_C = 'GRADE_C',
+  REJECT = 'REJECT',
+}
+
+export enum OfferStatus {
+  PROPOSED = 'PROPOSED',
+  ACCEPTED = 'ACCEPTED',
+  DECLINED = 'DECLINED',
+  COUNTERED = 'COUNTERED',
+  EXPIRED = 'EXPIRED',
+}
+
+export enum PaymentMethod {
+  MOBILE_MONEY = 'MOBILE_MONEY',
+  BANK_TRANSFER = 'BANK_TRANSFER',
+}
+
+export enum PaymentStatus {
+  PENDING = 'PENDING',
+  CONFIRMED = 'CONFIRMED',
+  FAILED = 'FAILED',
+  REFUNDED = 'REFUNDED',
+}
+
+export enum DisputeStatus {
+  OPEN = 'OPEN',
+  UNDER_REVIEW = 'UNDER_REVIEW',
+  RESOLVED = 'RESOLVED',
+  CLOSED = 'CLOSED',
+}
+
+export enum DisputeOutcome {
+  FULL_PAYOUT = 'FULL_PAYOUT',
+  ADJUSTED_PAYOUT = 'ADJUSTED_PAYOUT',
+  REFUND = 'REFUND',
+  SPLIT = 'SPLIT',
+}
+
+export enum SyncStatus {
+  LOCAL_DRAFT = 'LOCAL_DRAFT',
+  QUEUED = 'QUEUED',
+  SYNCING = 'SYNCING',
+  SYNCED = 'SYNCED',
+  FAILED = 'FAILED',
+  NEEDS_ATTENTION = 'NEEDS_ATTENTION',
+}
+
+export enum NotificationType {
+  ACCOUNT = 'ACCOUNT',
+  LOT = 'LOT',
+  OFFER = 'OFFER',
+  ORDER = 'ORDER',
+  PAYMENT = 'PAYMENT',
+  DELIVERY = 'DELIVERY',
+  DISPUTE = 'DISPUTE',
+  SYSTEM = 'SYSTEM',
+}

@@ -1,0 +1,297 @@
+﻿
+CARGO V1
+Product DeliveryRoadmap
+A phased execution plan for the web, mobile, and backend team
+DOCUMENT
+ | Team roadmap and implementation sequence
+ | 
+PRODUCT
+ | Cargo V1 — managed agricultural marketplace
+ | 
+STACK
+ | NestJS · Prisma · PostgreSQL · Next.js · React Native
+ | 
+OUR DELIVERY PRINCIPLE
+Build in small, testable phases. Integrate continuously. Deliver a complete, reliable trade workflow before expanding scope.
+
+1. Purpose and Team Alignment
+This document defines the sequence in which the Cargo V1 team will design, build, integrate, test, and release the first version of the platform. It is the shared reference for what each phase includes, what must be completed before moving forward, and how the three developers coordinate work across the backend, web, and mobile repositories.
+Product outcome
+Cargo V1 is a managed agricultural marketplace connecting verified suppliers and cooperatives with institutional buyers. It supports verified produce lots, field grading, buyer requests, administrator-assisted matching, offers and orders, payment confirmation, delivery acceptance, supplier settlement, and trade records.
+Delivery principles
+One shared backend API and one authoritative PostgreSQL database.
+Build a modular monolith first; do not split V1 into microservices.
+Keep business rules and permissions on the server. Client-side checks improve UX but are not security controls.
+Define API contracts and statuses once, then keep web and mobile aligned with them.
+Design mobile offline capture and later synchronization from the beginning.
+Prioritize correctness of stock, payments, delivery, disputes, and settlement over feature breadth.
+Each task has one accountable owner, clear acceptance criteria, and tests.
+2. Delivery at a Glance
+PHASE
+ | FOCUS
+ | EXIT OUTCOME
+ | 
+Phase 0
+ | Foundation & Alignment
+ | Inspect repos, agree conventions, CI, environment validation, API contract and delivery board.
+ | 
+Phase 1
+ | Identity & Organisation Verification
+ | Authentication, roles, organisation onboarding, admin approval, catalogue/settings, audit foundation.
+ | 
+Phase 2
+ | Lots, Grading & Offline Capture
+ | Create lots, field grading, media, approval workflow and mobile offline queue/sync.
+ | 
+Phase 3
+ | Requests, Matching, Offers & Orders
+ | Buyer demand, admin-assisted pooling/matching, offers, order confirmation and safe stock reservation.
+ | 
+Phase 4
+ | Payments, Delivery & Settlement
+ | Payment reconciliation, dispatch gate, delivery/acceptance, invoices, settlement and disputes.
+ | 
+Phase 5
+ | Operational Readiness & Pilot
+ | Notifications, reporting, security review, monitoring, backup/restore, end-to-end tests and pilot release.
+ | 
+Scheduling note: phases are a dependency order, not fixed calendar promises. The team should estimate durations after inspecting the current repositories, agreeing the backlog, and identifying integration risks.
+
+3. Phase 0 — Foundation & Alignment
+Objective: Establish a stable development workflow before building business features.
+Scope and deliverables
+Inspect the current backend, web, and mobile repositories; document what already exists before restructuring.
+Confirm stack, module boundaries, naming conventions, error format, validation approach, environment configuration, and branching/PR rules.
+Set up formatting, linting, type-checking, automated tests, and CI checks for each repository.
+Publish the first API contract through NestJS OpenAPI/Swagger and document how clients consume it.
+Create the Cargo V1 Delivery project board and break work into owned tasks.
+Team workstreams
+Backend / API
+Confirm NestJS + Prisma + PostgreSQL setup, health endpoint, configuration validation, logging, global validation/error handling, and OpenAPI.
+Agree migration ownership and a review process; add seed strategy for local development.
+Create shared conventions for pagination, filtering, timestamps, money, quantities, status values, and API errors.
+Web
+Confirm Next.js + React + shadcn/ui setup and a consistent API client/error-handling pattern.
+Establish app layout, route conventions, environment configuration, loading/empty/error patterns, and basic CI.
+Mobile
+Confirm React Native + TypeScript setup, Android-first run instructions, navigation, API client, local storage approach, and basic CI.
+Document the offline queue approach before feature development starts.
+Exit criteria — phase is complete when
+All three repositories can be installed, run, linted, type-checked, and tested using documented commands.
+A health endpoint and API documentation are available in the backend.
+The team agrees on API conventions, PR process, module ownership, and a prioritized first backlog.
+Existing code and gaps have been reviewed; no major restructure is started without a reason.
+Watch-outs
+Do not build all modules at once. Keep Phase 0 focused on alignment and a reliable developer workflow.
+
+4. Phase 1 — Identity & Organisation Verification
+Objective: Make access secure and ensure only approved organisations and users can transact.
+Scope and deliverables
+Registration and login for supplier, buyer, and field-agent users, with administrator-managed approval.
+Organisation profiles and verification submission/review.
+Role-based access control and active/suspended account handling.
+Catalogue and basic system settings required for lots and requests.
+Audit trail foundation for sensitive actions.
+Team workstreams
+Backend / API
+Implement authentication, password hashing, access/refresh session strategy, role and permission guards, account status checks, and secure reset/OTP flows as agreed.
+Implement users, organisations, verification status/review, catalogue/settings, and audit events.
+Add tests for unauthorised access, suspended accounts, invalid input, repeated login failures, and approval decisions.
+Web
+Build login, registration, organisation profile, verification submission/status, and admin approval/rejection screens.
+Protect routes and handle expired sessions, permission errors, loading states, and validation feedback.
+Mobile
+Build login, registration, organisation profile, verification capture/status, and secure session persistence.
+Handle network failures and show clear verification/account states.
+Exit criteria — phase is complete when
+A new user can register and submit organisation details; an administrator can approve or reject them.
+Server-side permissions prevent users from accessing other roles' protected actions.
+Suspended or unapproved accounts cannot perform restricted transactions.
+API docs and automated tests cover the implemented identity and verification flows.
+Watch-outs
+Do not trust role or approval values supplied by the client. Enforce them on the server.
+
+5. Phase 2 — Lots, Grading & Offline Capture
+Objective: Create a trustworthy inventory layer with traceable quality grading and resilient field operations.
+Scope and deliverables
+Supplier creates and manages produce lots with crop, quantity, unit, location, harvest/readiness information, and supporting photos where needed.
+Field agent records grading results and evidence.
+Administrator reviews/approves eligible stock.
+Mobile offline drafts and queued actions sync when connectivity returns.
+Buyer-facing views expose only eligible, verified stock.
+Team workstreams
+Backend / API
+Implement lot lifecycle, grading records, media metadata/storage integration, approval rules, and audit events.
+Define idempotent sync endpoints and conflict rules; return clear per-item sync outcomes.
+Add tests for duplicate sync submissions, invalid transitions, rejected lots, expired lots, and permission boundaries.
+Web
+Build lot/inventory views and admin review screens needed to verify lots and inspect grading details.
+Show only approved stock in buyer-facing inventory.
+Mobile
+Build lot creation/editing, photo/evidence capture, grading workflow, offline drafts, queued actions, retry, and sync status indicators.
+Make pending, synced, failed, and conflict states visible to field users.
+Exit criteria — phase is complete when
+A supplier can submit a lot; a field agent can grade it; an administrator can approve/reject it.
+Only approved and eligible stock appears as available to buyers.
+Offline work survives app restarts and syncs without silently duplicating records.
+Grading and approval history is traceable; corrections are recorded rather than silently overwriting history.
+Watch-outs
+The server remains authoritative for stock and status. Offline clients must not mark a lot approved or a payment complete.
+
+6. Phase 3 — Requests, Matching, Offers & Orders
+Objective: Connect buyer demand to eligible supply and create reliable, confirmed orders.
+Scope and deliverables
+Buyer creates a produce request with quantity, quality/specification, delivery location, and needed date.
+Administrator reviews demand and manually pools/matches eligible lots to requests.
+Supplier/buyer offers and counter-offers follow an agreed, documented workflow.
+Accepted offers create confirmed orders and reserve the required quantity.
+Team workstreams
+Backend / API
+Implement requests, matching/pooling records, offers, counter-offers, order creation, and status transitions.
+Use database transactions and concurrency-safe quantity reservation to prevent overselling and double-selling.
+Define expiry, cancellation, partial quantity, and rejection behavior before client implementation.
+Test simultaneous offer acceptance, insufficient stock, expired lots, duplicate requests, and invalid state transitions.
+Web
+Build buyer request creation/list/detail views and admin matching workspace.
+Build offer review/negotiation and order detail/status screens.
+Mobile
+Build supplier views for relevant offers and order summaries/status updates needed in the field.
+Ensure queued actions cannot bypass server-side stock and status checks.
+Exit criteria — phase is complete when
+A buyer request can be created and reviewed; admin matching links it to eligible lots.
+Offer acceptance produces one valid order and reserves stock exactly once.
+Concurrent or repeated requests cannot oversell inventory.
+Web and mobile display the same server-defined statuses and allowed actions.
+Watch-outs
+Do not implement a fully automated matching algorithm in V1. Administrator-assisted matching is the intended initial workflow.
+
+7. Phase 4 — Payments, Delivery & Settlement
+Objective: Complete the trade lifecycle with verifiable payment, delivery, acceptance, and settlement records.
+Scope and deliverables
+Record payment initiation/reference and reconcile payment status with the selected licensed payment partner.
+Require confirmed buyer payment before dispatch.
+Record dispatch, delivery, received quantity, and buyer acceptance/rejection.
+Prepare supplier settlement only after buyer acceptance.
+Generate invoice/trade records and manage disputes that pause affected settlement amounts.
+Team workstreams
+Backend / API
+Implement payment records, provider callback verification/idempotency, reconciliation, delivery, acceptance, settlement, invoice records, and disputes.
+Enforce the dispatch gate on the server: payment must be confirmed.
+Enforce settlement eligibility: buyer acceptance must be recorded; disputed amounts remain on hold.
+Keep financial events and important status history append-only; record corrections as new events.
+Test duplicate callbacks, mismatched amounts, payment delays/failures, partial delivery, acceptance rejection, and dispute holds.
+Web
+Build admin payment reconciliation, delivery/order monitoring, dispute handling, invoice/trade record, and settlement views.
+Expose clear payment and delivery status to buyers.
+Mobile
+Build field-facing dispatch/delivery capture and evidence/quantity recording appropriate to the field workflow.
+Make pending payment, delivery pending, accepted, disputed, and sync-pending states unambiguous.
+Exit criteria — phase is complete when
+An order cannot be dispatched until payment is confirmed by a trusted provider signal or an audited admin fallback.
+Delivery and buyer acceptance are recorded and auditable.
+Settlement is prepared only after acceptance and excludes disputed amounts until resolved.
+Duplicate provider callbacks do not duplicate financial records or actions.
+Invoice and trade records can be retrieved for completed transactions.
+Watch-outs
+Start payment-partner onboarding during Phase 2. Cargo records and reconciles payments; it does not hold or lend money itself. Manual confirmation is a controlled fallback if provider onboarding is not ready.
+
+8. Phase 5 — Operational Readiness & Pilot
+Objective: Harden the complete workflow and prepare a controlled release for the first users.
+Scope and deliverables
+Notifications for important account, lot, offer, order, payment, delivery, and dispute events.
+Operational reports and dashboards for activity, stock, orders, payments, and settlement status.
+Security, usability, reliability, monitoring, backup, and recovery review.
+End-to-end testing of the full trade journey and pilot onboarding.
+Team workstreams
+Backend / API
+Complete audit coverage for sensitive actions; add structured logs, health checks, monitoring, scheduled jobs, and safe retry behavior.
+Test database backup and restore; document deployment, rollback, secrets, and incident response basics.
+Run end-to-end and regression tests; review permissions, input validation, rate limits, and data access.
+Web
+Finish admin/buyer workflows and accessible loading, empty, success, and error states.
+Validate reports against source records and confirm filters/export behavior if included.
+Mobile
+Test Android flows on realistic devices and unreliable networks.
+Verify offline queue recovery, conflict messaging, retry, and user-visible sync state.
+Exit criteria — phase is complete when
+The complete trade flow works end to end in a production-like environment.
+Critical tests pass and known pilot limitations are documented.
+Backups are verified by a restore test; deployment and rollback steps are documented.
+Pilot users, support contact/process, feedback channel, and issue triage are agreed.
+Watch-outs
+Start small: approximately 10 pilot users, 1–2 crops, and 1–2 districts. Expand only after observing real workflow reliability.
+9. End-to-End Workflow We Must Deliver
+The phases must converge on one working business journey—not a collection of disconnected screens:
+User and organisation registration → administrator verification/approval.
+Supplier creates a produce lot → field agent grades it, including offline capture where necessary.
+Administrator verifies the lot → eligible stock becomes visible to buyers.
+Buyer browses stock or submits a request → administrator pools/matches suitable lots.
+Offer is negotiated and accepted → order is confirmed and inventory is reserved safely.
+Buyer payment is confirmed → dispatch is permitted.
+Delivery and received quantity are recorded → buyer accepts or raises a dispute.
+After acceptance, settlement is prepared; disputed amounts remain on hold.
+Invoice/trade records, notifications, audit history, and reports are available.
+10. Developer Ownership & Collaboration
+All three developers contribute to backend delivery. Primary ownership means coordinating implementation and ensuring completion—not exclusive permission to work in that area.
+PRIMARY RESPONSIBILITY
+ | ACCOUNTABILITY
+ | 
+Developer 1 — Web primary
+ | Buyer and administrator UX; leads Requests, Offers & Matching, Orders, and Reports; collaborates on Organisations and Audit.
+ | 
+Developer 2 — Mobile primary
+ | Supplier and field-agent UX; leads Lots, Grading, Offline Capture/Sync, and mobile media workflows; collaborates on Organisations and Notifications.
+ | 
+Developer 3 — Backend coordination
+ | Coordinates architecture/API contracts, auth foundation, Prisma migration review, payment integration, deployment, and cross-module integration. Also implements backend features.
+ | 
+Working agreements
+Every task has one named owner, a target phase, repository, priority, dependencies, and acceptance criteria.
+Cross-repository work uses one parent task with linked backend, web, and mobile subtasks.
+No client should invent API status values or business rules. Update the API contract first, then coordinate client changes.
+Prisma schema changes and migrations must be reviewed and coordinated to avoid conflicting migration histories.
+Use pull requests, review changes, and keep the main branch in a runnable state.
+Raise blockers early; do not wait until phase-end integration to discover contract mismatches.
+11. Definition of Done
+A task is not complete just because the code exists. Mark it Done only when all applicable checks are satisfied:
+Acceptance criteria match the agreed requirement.
+Server-side authorization, validation, and business rules are implemented where required.
+Automated tests cover normal behavior and relevant failure/edge cases.
+Database migrations are reviewed and work on a clean setup.
+API documentation and shared status/error contracts are updated.
+Web/mobile include loading, empty, success, and error states where applicable.
+Sensitive actions are audited; financial and stock changes are traceable.
+CI passes, the pull request is reviewed, and the change is integration-tested.
+For stock and financial workflows, the Definition of Done additionally requires tests for duplicates, concurrent requests, partial failures, retries, and recovery.
+12. Project Board & Team Rhythm
+Recommended task-board columns
+Backlog → Ready → In Progress → Review → Integration Testing → Done
+Each task should include
+Task ID and concise title
+Phase and module
+Repository (backend, web, mobile, or cross-repo)
+One accountable owner
+Priority and dependencies
+Acceptance criteria and test expectations
+Linked pull request and review status
+Team rhythm
+Planning: confirm the phase goal, dependencies, owners, and acceptance criteria.
+Daily check-in: what was completed, what is next, and what is blocked.
+Integration session: test shared API/client work before the end of the phase.
+Pull-request review: keep changes small and explain important design choices.
+Milestone demo: demonstrate a working business journey, not just individual screens.
+13. V1 Scope Guardrails
+To protect delivery focus, the following are outside the initial V1 unless the team explicitly approves a scope change:
+USSD and iOS applications.
+A dedicated transporter application.
+Fully automated pooling/matching algorithms.
+Forward contracts, reverse auctions/tendering, and buyer credit terms.
+Cold-chain tracking and data-product sales.
+Direct RRA/EBM integration; V1 should retain invoice/trade details for future integration.
+14. Immediate Next Steps
+Each developer inspects their existing repository and records current state, blockers, and reusable work.
+Hold a short architecture alignment meeting and agree API conventions, statuses, permissions, and migration ownership.
+Create the Cargo V1 Delivery board and populate Phase 0 tasks with owners and acceptance criteria.
+Complete Phase 0 exit criteria before committing to detailed delivery dates.
+Start Phase 1 with a thin vertical slice: register → submit organisation → admin review → approved user accesses the correct dashboard.
+ONE TEAM. ONE API CONTRACT. ONE RELIABLE TRADE WORKFLOW.

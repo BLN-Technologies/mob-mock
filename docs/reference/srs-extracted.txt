@@ -1,0 +1,642 @@
+﻿
+Software Requirements Specification: Cargo V1
+Version 1.0 | October 2026 | Prepared by Christian, founder | Status: Draft for review
+1. Introduction
+1.1 Purpose
+This document specifies the software requirements for version 1 (V1) of Cargo, a digital platform that connects Rwandan cooperatives and farms with bulk buyers. It is written for the founder and developers who will build V1, the people who will test it, and the partners and investors who need to know exactly what V1 will and will not do. Once approved, it is the reference for design, development, testing and acceptance of V1.
+1.2 Scope
+Cargo V1 is a managed marketplace for harvest-ready agricultural produce. It lets cooperatives list verified stock, lets institutional buyers request and order that stock, secures payment before delivery, records quality and delivery, and produces the paperwork both sides need.
+A small Cargo team of administrators and field agents operates the platform alongside the software. Some steps, such as combining stock from several cooperatives into one order, are therefore assisted by people in V1 instead of being fully automated.
+V1 consists of three parts:
+A mobile application (Android first) for cooperative leaders and field agents.
+A web application for buyers and Cargo administrators.
+A backend service and database shared by both applications.
+The goals of V1 are to complete real trades from start to finish, build trust through verified quality and secure payment, capture the data needed to improve the product, and keep running costs low (one server, about 10 early users).
+1.3 Definitions and abbreviations
+Term
+ | Meaning
+ | 
+Supplier
+ | A cooperative or farm group that sells produce through Cargo
+ | 
+Buyer
+ | An institution (for example a school or processor) that buys produce through Cargo
+ | 
+Field agent
+ | A Cargo-appointed person who visits suppliers to verify and grade lots
+ | 
+Administrator
+ | A Cargo staff member who manages users, orders and settings
+ | 
+Lot
+ | A quantity of one crop that a supplier has ready for sale, with a single grade and location
+ | 
+Grade
+ | A standard quality rating assigned to a lot after inspection
+ | 
+Request
+ | A buyer's posted need for a crop, quantity, grade, delivery place and date
+ | 
+Order
+ | An agreed purchase of one or more lots by a buyer
+ | 
+Pooled order
+ | An order fulfilled by combining lots from more than one supplier
+ | 
+Settlement
+ | Paying the supplier(s) after the buyer accepts delivery
+ | 
+EBM
+ | Electronic Billing Machine, the Rwanda Revenue Authority invoicing system
+ | 
+RSB
+ | Rwanda Standards Board
+ | 
+RRA
+ | Rwanda Revenue Authority
+ | 
+Mobile money
+ | Wallet payment services such as MTN MoMo and Airtel Money
+ | 
+OTP
+ | One-time password sent by SMS or email
+ | 
+RBAC
+ | Role-based access control
+ | 
+1.4 References
+Cargo: Business Model and Implementation Journey
+Cargo Investor Briefing
+Cargo V1 Launch Costs
+1.5 Document conventions
+Each requirement has an ID such as FR-LOT-03. The word shall marks a mandatory requirement. Priorities are:
+Must: required for the V1 release.
+Should: important and included if time allows.
+Could: desirable and may move to a later version.
+2. Overall Description
+2.1 Product perspective
+Cargo V1 is a new, self-contained system. It depends on outside services for payments (a licensed mobile money or banking partner), messaging (SMS, email, push notifications), file storage, and maps. It does not replace or integrate with government systems in V1, although it keeps the records needed to connect to EBM invoicing later.
+2.2 Product functions (summary)
+Register and verify suppliers, buyers and staff, with role-based access.
+List harvest-ready lots with photos, quantity, location and availability date.
+Verify and grade lots in the field, including without a connection.
+Let buyers post requests and browse or reserve verified lots.
+Let administrators combine lots from several suppliers into one order.
+Create orders with agreed price, quantity, grade and delivery terms.
+Collect payment before dispatch and settle suppliers after acceptance.
+Record delivery, buyer acceptance and disputes.
+Produce invoices and trade records.
+Notify users of every important event.
+Give administrators tools to run and monitor the marketplace.
+2.3 User classes
+User class
+ | Description
+ | Main application
+ | Technical skill
+ | 
+Supplier (cooperative leader)
+ | Lists lots, accepts orders, receives payment
+ | Mobile
+ | Low to moderate; 
+ | 
+Field agent
+ | Verifies suppliers, inspects and grades lots, records photos
+ | Mobile
+ | Moderate; often with weak connectivity
+ | 
+Buyer
+ | Posts requests, reserves and orders lots, pays, confirms delivery
+ | mobile (web browser also supported)
+ | Moderate
+ | 
+Administrator
+ | Manages users, matching, pooling, orders, payments, disputes and settings
+ | Web
+ | High
+ | 
+Transporters are not system users in V1. Administrators record trips and delivery details on their behalf.
+2.4 Operating environment
+Mobile application: Android 8.0 or later on inexpensive smartphones, with limited storage and unreliable data.
+Web application: current versions of Chrome, Firefox, Edge and Safari on desktop and mobile.
+Server: one virtual private server (VPS) running the backend, database and web application.
+2.5 Design and implementation constraints
+C-01: V1 shall run on a single VPS with a small monthly cost, so the design shall avoid heavy infrastructure.
+C-02: The mobile and web applications shall use the same backend interface so that business rules exist in one place.
+C-03: USSD is not used. Suppliers and field agents use the mobile application.
+C-04: Payment collection, holding and payout shall go through a licensed payment partner. Cargo software records and reconciles payments but does not itself hold or lend money.
+C-05: The system shall comply with Rwandan law on data protection, taxation and electronic invoicing.
+C-06: Android is the first mobile release. An iOS release is outside V1.
+2.6 Assumptions and dependencies
+A-01: A mobile money or banking partner can be onboarded before launch. If not, administrators confirm payments manually and record them in the system.
+A-02: Suppliers have access to a smartphone (their own, the cooperative's or the field agent's).
+A-03: V1 starts with one or two crops, one buyer type and one or two districts.
+A-04: The first release serves about 10 early users, and the design allows growth without a rewrite.
+A-05: EBM-compliant invoices are issued through the RRA process. V1 stores the resulting invoice details and does not replace the EBM.
+A-06: Transport is arranged with trusted local transporters, outside the software.
+2.7 V1 scope boundaries
+In scope: accounts and verification, lot listing, field grading, buyer requests, administrator-assisted pooling, orders, payment and settlement tracking, delivery recording, invoice records, disputes, notifications, administration and basic reports.
+Out of scope for V1: pre-harvest forward contracts, reverse auctions and tendering, automatic pooling algorithms, buyer credit terms (Net-15 to Net-60), cold-chain temperature tracking, a transporter application, direct EBM system integration, USSD, an iOS app, and sale of data products. These are listed in section 9.
+3. Functional Requirements
+3.1 Accounts, roles and authentication
+FR-AUTH-01 (Must): The system shall allow supplier, buyer and field agent accounts to be created, with administrators able to approve or reject each registration.
+FR-AUTH-02 (Must): The system shall support four roles (supplier, field agent, buyer, administrator) with permissions limited to what each role needs.
+FR-AUTH-03 (Must): Users shall log in with a phone number or email plus a password, and a one-time password shall be required at first login and on a new device.
+FR-AUTH-04 (Must): The system shall let users reset a forgotten password through an OTP.
+FR-AUTH-05 (Must): The system shall lock an account temporarily after repeated failed login attempts.
+FR-AUTH-06 (Should): Users shall be able to sign out of all devices.
+FR-AUTH-07 (Must): Administrators shall be able to suspend or reactivate any account, and suspended users shall be unable to log in or transact.
+FR-AUTH-08 (Must): The mobile application shall keep users signed in securely between uses.
+3.2 Organisation profiles and verification
+FR-ORG-01 (Must): A supplier profile shall store the cooperative name, registration number, district and sector, contact person, phone number, crops grown and approximate capacity.
+FR-ORG-02 (Must): A buyer profile shall store the organisation name, type, registration and tax identification details, delivery locations and contact persons.
+FR-ORG-03 (Must): A supplier shall have a verification status (pending, verified, suspended). Only verified suppliers can list lots.
+FR-ORG-04 (Must): A field agent shall be able to record a supplier visit, with notes, photos and location, as part of verifying that supplier.
+FR-ORG-05 (Must): Administrators shall be able to approve a supplier or buyer after reviewing the submitted details and documents.
+FR-ORG-06 (Should): The system shall let several named users act for one organisation, such as a cooperative leader and a secretary.
+FR-ORG-07 (Should): The system shall keep a simple trade history and rating summary for each supplier and buyer (orders completed, on-time delivery, disputes).
+3.3 Harvest lot listings
+FR-LOT-01 (Must): A verified supplier shall be able to create a lot with crop, variety, quantity (kilograms or tons), unit price expectation, harvest date, availability date, pickup location and at least one photo.
+FR-LOT-02 (Must): The system shall allow lots only for harvest-ready stock. It shall not allow listing of crops that are not yet harvested.
+FR-LOT-03 (Must): A lot shall move through these statuses: Draft, Submitted, Verified, Reserved, Sold, Rejected, Withdrawn, Expired (see section 7).
+FR-LOT-04 (Must): A supplier shall be able to edit or withdraw a lot until it is verified. After verification, quantity or price changes shall require administrator approval and be recorded.
+FR-LOT-05 (Must): A lot shall not be visible to buyers until a field agent has graded it and an administrator has verified it.
+FR-LOT-06 (Must): The system shall reduce a lot's available quantity when part of it is reserved or sold, and shall allow a lot to be partly sold.
+FR-LOT-07 (Should): The system shall expire lots automatically after a configurable period, with a warning to the supplier first.
+FR-LOT-08 (Should): The mobile application shall let a supplier prepare a lot without a connection and send it when connectivity returns.
+FR-LOT-09 (Must): Each lot shall have a unique lot code that appears on grading records, orders, delivery notes and invoices.
+3.4 Quality grading and verification
+FR-QA-01 (Must): The system shall define a grading template for each supported crop, with measurements such as moisture percentage, foreign matter, damaged or defective share, size or count, and an overall grade.
+FR-QA-02 (Must): A field agent shall be able to open a submitted lot, record each measurement, attach photos, capture the location and submit a grading result.
+FR-QA-03 (Must): The mobile application shall let field agents record grading data without a connection and sync it later without data loss.
+FR-QA-04 (Must): The system shall calculate or confirm the grade from the measurements using rules set by administrators, and show the field agent the result before submission.
+FR-QA-05 (Must): Grading records shall be stored permanently, linked to the lot, and not editable after submission. Corrections shall create a new, dated record.
+FR-QA-06 (Must): Administrators shall be able to approve a graded lot, which makes it visible to buyers, or reject it with a reason shown to the supplier.
+FR-QA-07 (Should): The system shall support a delivery-time check in which the buyer or administrator records the received grade for comparison with the original grade.
+FR-QA-08 (Could): The system shall support attaching an inspection or phytosanitary certificate file to a lot.
+3.5 Buyer requests and matching
+FR-REQ-01 (Must): A verified buyer shall be able to browse verified lots and filter by crop, grade, quantity, district, price and availability date.
+FR-REQ-02 (Must): A buyer shall be able to post a request with crop, minimum grade, quantity, target price, delivery location and required date.
+FR-REQ-03 (Must): Administrators shall see all open requests and be able to propose a match from one or more verified lots, including lots from several suppliers (pooling).
+FR-REQ-04 (Must): The system shall show the buyer a proposed match as a single offer with total quantity, price per unit, total price, grades, delivery date and supplier count, without requiring the buyer to deal with each supplier.
+FR-REQ-05 (Must): A buyer shall be able to accept, decline or counter a proposed offer, and the full negotiation history shall be stored.
+FR-REQ-06 (Must): When a buyer accepts an offer, the system shall reserve the matching quantity from each lot so it cannot be sold twice.
+FR-REQ-07 (Should): A buyer shall be able to reserve a single lot directly, without posting a request.
+FR-REQ-08 (Should): The system shall suggest candidate lots for a request, ranked by crop, grade, quantity, district and date, to help administrators.
+FR-REQ-09 (Must): A request shall expire after a configurable period and the buyer shall be told.
+3.6 Orders
+FR-ORD-01 (Must): An accepted offer shall create an order with a unique order number, buyer, supplier allocations, crop, grade, quantity, agreed price, fees, delivery location, delivery date and terms.
+FR-ORD-02 (Must): The system shall support orders with more than one supplier allocation and show the buyer one order with one delivery and one invoice.
+FR-ORD-03 (Must): An order shall move through these statuses: Created, Confirmed, Payment Pending, Paid, Dispatched, Delivered, Accepted, Settled, Cancelled, Disputed (see section 7).
+FR-ORD-04 (Must): Each supplier on an order shall confirm their allocation. If a supplier declines or cannot supply, the administrator shall be told so they can substitute another lot.
+FR-ORD-05 (Must): The buyer and the suppliers shall accept the order terms electronically, and the acceptance (who, when) shall be stored.
+FR-ORD-06 (Must): The system shall calculate the Cargo fee (commission and inspection fee) for each order from settings managed by administrators, and show it clearly to the party who pays it.
+FR-ORD-07 (Must): Cancellation shall follow rules set by administrators, with the reason recorded and the reserved stock released.
+FR-ORD-08 (Should): Buyers shall be able to repeat a previous order with one action.
+3.7 Payments and settlement
+FR-PAY-01 (Must): The system shall require payment confirmation before an order can be marked Paid and dispatched.
+FR-PAY-02 (Must): A buyer shall be able to pay by mobile money or bank transfer through the payment partner, and the system shall show the payment instructions or start the payment.
+FR-PAY-03 (Must): The system shall receive payment status from the partner (or from an administrator's manual confirmation) and update the order. Every confirmation shall record who confirmed it and a payment reference.
+FR-PAY-04 (Must): After the buyer accepts delivery, the system shall calculate each supplier's payout (their share of the order value minus Cargo's fee) and prepare it for payment.
+FR-PAY-05 (Must): Payouts shall be made to the supplier's registered mobile money number or bank account, and the system shall record the status and reference for each payout.
+FR-PAY-06 (Must): The system shall not store card numbers or mobile money PINs. Sensitive payment steps shall be completed with the payment partner.
+FR-PAY-07 (Must): Administrators shall be able to reconcile payments by comparing system records with partner statements and flagging differences.
+FR-PAY-08 (Should): The system shall support partial refunds or adjustments linked to a dispute, with approval by an administrator.
+FR-PAY-09 (Must): Every money movement shall appear in an immutable transaction ledger with date, order, parties, amount, type and reference.
+3.8 Delivery
+FR-DEL-01 (Must): Administrators shall be able to record a trip for each order: transporter name, vehicle, driver contact, pickup and delivery details, planned dates and quantity loaded.
+FR-DEL-02 (Must): The system shall record the loading confirmation (quantity loaded, time, and the person who confirmed it).
+FR-DEL-03 (Must): The buyer shall confirm receipt by recording the quantity received and, where possible, the received quality, with photos if there is a problem.
+FR-DEL-04 (Must): If the received quantity or quality differs from the order beyond a configured tolerance, the system shall prompt the buyer to accept, accept with adjustment, or open a dispute.
+FR-DEL-05 (Must): Buyer acceptance (full or adjusted) shall trigger settlement, and the system shall show suppliers when their payout is expected.
+FR-DEL-06 (Should): If a buyer does not respond within a configured number of days after delivery is recorded, the order shall be flagged to an administrator for follow-up instead of being accepted automatically.
+FR-DEL-07 (Could): Delivery records shall allow capturing the location where the delivery was confirmed.
+3.9 Invoicing and records
+FR-INV-01 (Must): The system shall generate an invoice record for each order, listing buyer, supplier allocations, crop, grade, quantity, unit price, fees and total.
+FR-INV-02 (Must): The system shall store the EBM invoice or receipt number and a copy of the document for each order, entered by an administrator, so every trade has a traceable tax record.
+FR-INV-03 (Must): The system shall produce a downloadable PDF of the order summary, delivery note and invoice details for buyers and suppliers.
+FR-INV-04 (Must): The system shall keep a complete trade record per order (listing, grading, offer, payment, delivery, acceptance, settlement) so any trade can be audited.
+FR-INV-05 (Should): The system shall prepare data fields so that direct EBM integration can be added later without changing the order model.
+3.10 Disputes
+FR-DSP-01 (Must): A buyer or supplier shall be able to open a dispute on an order, with a reason, description and evidence (photos or documents).
+FR-DSP-02 (Must): Opening a dispute shall pause settlement of the affected amount.
+FR-DSP-03 (Must): Administrators shall be able to review evidence from both sides, add notes, decide the outcome (full payment, adjusted payment, refund, or other) and close the dispute.
+FR-DSP-04 (Must): All parties shall be notified of the outcome, and the decision and its reasons shall be stored.
+FR-DSP-05 (Should): Disputes shall be counted in supplier and buyer trade histories.
+3.11 Notifications
+FR-NTF-01 (Must): The system shall send notifications for key events, including account approval, lot grading and verification, new matching offers, order confirmation, payment received, dispatch, delivery, acceptance, payout, dispute updates and expiring lots or requests.
+FR-NTF-02 (Must): Notifications shall be sent in the app (push notification and in-app inbox) and shall also be sent by SMS for events that need action by users with poor connectivity.
+FR-NTF-03 (Should): Buyers and administrators shall also receive email notifications.
+FR-NTF-04 (Should): Users shall be able to choose which channels they receive for non-critical events.
+FR-NTF-05 (Must): Notification text shall be available in Kinyarwanda and English according to the user's language setting.
+3.12 Administrator back office
+FR-ADM-01 (Must): Administrators shall be able to manage users, roles, approvals and suspensions.
+FR-ADM-02 (Must): Administrators shall be able to manage crops, grading templates, grade rules, units, districts, delivery tolerances, expiry periods and fee percentages without code changes.
+FR-ADM-03 (Must): Administrators shall have one view of all lots, requests, offers, orders, payments, deliveries and disputes, with search and filters.
+FR-ADM-04 (Must): Administrators shall be able to create pooled offers and substitute lots in an order.
+FR-ADM-05 (Must): The system shall keep an audit log of important actions (who, what, when, before and after values) that cannot be edited.
+FR-ADM-06 (Should): The system shall support administrator roles with different permissions, such as operations, finance and support.
+FR-ADM-07 (Must): Administrators shall be able to export lists and records to CSV.
+3.13 Reporting
+FR-RPT-01 (Must): The administrator dashboard shall show tons traded, trade value, revenue (fees), active suppliers and buyers, open requests, lots available, and orders by status for a chosen period.
+FR-RPT-02 (Must): The system shall report on-time delivery rate, dispute rate, average days from delivery to supplier payout, and the share of verified stock that was sold.
+FR-RPT-03 (Should): Suppliers shall see a simple summary of their lots, sales and payouts, and buyers a summary of their orders and spending.
+FR-RPT-04 (Should): Reports shall be exportable to CSV or PDF for investor and partner updates.
+4. External Interface Requirements
+4.1 User interfaces
+UI-01 (Must): The mobile application shall use large touch targets, short text, clear icons and simple screens, and shall work on small screens (about 360 by 640 pixels).
+UI-02 (Must): The mobile application shall be available in Kinyarwanda and English, with Kinyarwanda as the default for suppliers and field agents.
+UI-03 (Must): The web application shall be responsive, work on desktop and mobile browsers, and be available in English. Kinyarwanda is a Should.
+UI-04 (Must): Status labels for lots, orders, payments and disputes shall use the same words and colours in every screen and application.
+UI-05 (Must): Forms shall validate input as the user types and explain every error in plain language.
+UI-06 (Must): Photos shall be compressed on the phone before upload, and large downloads shall be avoided to save mobile data.
+4.2 Hardware interfaces
+The mobile application shall use the phone camera for photos, GPS for location, and local storage for offline data.
+Moisture meters and scales are used by field agents outside the software. In V1 their readings are typed into the grading form.
+4.3 Software interfaces
+Service
+ | Purpose
+ | Notes
+ | 
+Payment partner (mobile money and bank)
+ | Start and confirm buyer payments, pay suppliers, report payment status
+ | Status updates received by secure callback and checked against the partner's records
+ | 
+SMS gateway
+ | One-time passwords and critical alerts
+ | Must cover Rwandan networks
+ | 
+Email service
+ | Receipts, summaries and buyer notifications
+ | Transactional email provider
+ | 
+Push notification service
+ | In-app alerts on Android
+ | Free tier is enough for V1
+ | 
+File storage
+ | Lot photos, grading photos, documents, PDFs
+ | On the server or an S3-compatible store
+ | 
+Maps (optional)
+ | Show lot and delivery locations
+ | A free map source is acceptable
+ | 
+4.4 Communications interfaces
+All traffic between apps and server shall use HTTPS with a valid certificate.
+The mobile and web applications shall talk to the backend through a documented JSON interface.
+Incoming callbacks from outside services shall be verified with a signature before they are trusted.
+5. Non-Functional Requirements
+5.1 Performance
+NFR-PERF-01 (Must): For 95% of requests under normal load, the backend shall respond within 1 second.
+NFR-PERF-02 (Must): Web pages shall load within 3 seconds on a typical 4G connection, and mobile screens shall open within 2 seconds from stored data.
+NFR-PERF-03 (Must): The V1 server shall support 500 registered users and 50 simultaneous users without redesign.
+NFR-PERF-04 (Should): Photo uploads shall be resumable after a lost connection, and each compressed photo shall be about 1 MB or less.
+5.2 Reliability, availability and recovery
+NFR-REL-01 (Must): The target availability for V1 is 99% per month. Planned maintenance shall be announced to users beforehand.
+NFR-REL-02 (Must): The database shall be backed up automatically every day, with a copy stored away from the server, and backups shall be kept for at least 30 days.
+NFR-REL-03 (Must): A restore from backup shall be tested before launch and at least once every three months afterwards.
+NFR-REL-04 (Must): The recovery targets are to lose no more than 24 hours of data and to be running again within 8 hours of a server failure.
+NFR-REL-05 (Must): An uptime monitor shall alert the founder when the system is down, and an error-tracking tool shall record application errors.
+NFR-REL-06 (Must): A failed payment callback, SMS or sync shall be retried and shall not leave an order in an inconsistent state.
+5.3 Security
+NFR-SEC-01 (Must): Passwords shall be stored only as salted hashes using a modern algorithm.
+NFR-SEC-02 (Must): Permissions shall be enforced on the server for every request, not only hidden in the screens.
+NFR-SEC-03 (Must): Administrator accounts shall require a one-time code in addition to a password.
+NFR-SEC-04 (Must): The system shall limit repeated requests (for example login and OTP attempts) to slow down attacks.
+NFR-SEC-05 (Must): The system shall validate all input and protect against common web attacks such as injection, cross-site scripting and broken access control.
+NFR-SEC-06 (Must): Uploaded files shall be restricted by type and size and shall not be run as code.
+NFR-SEC-07 (Must): Secrets such as keys and passwords shall be kept outside the code and shall never be sent to the apps.
+NFR-SEC-08 (Must): The server shall use a firewall, key-based remote access only, and regular security updates.
+NFR-SEC-09 (Must): Login sessions shall expire after a period of inactivity, and sensitive actions shall ask for confirmation.
+5.4 Privacy and data protection
+NFR-PRV-01 (Must): The system shall collect only the personal data needed to run the marketplace, and users shall agree to the terms and privacy policy at registration.
+NFR-PRV-02 (Must): A public privacy policy shall describe what is collected, why, who sees it, and how a user can ask for correction or deletion. It is also required by app stores.
+NFR-PRV-03 (Must): Users shall see only the data their role needs. Buyers and suppliers shall not see each other's phone numbers by default.
+NFR-PRV-04 (Must): Financial and trade records shall be kept for the period required by Rwandan law. The exact period shall be confirmed with a tax adviser.
+5.5 Usability
+NFR-USE-01 (Should): After short training, a supplier shall be able to list a lot in under 5 minutes.
+NFR-USE-02 (Should): A field agent shall be able to complete a grading record in under 10 minutes.
+NFR-USE-03 (Must): Text shall be readable outdoors and on low-cost screens, with adequate contrast and adjustable text size where the platform allows.
+5.6 Localisation
+Currency shall be Rwandan francs (RWF), stored as whole numbers.
+Quantities shall be shown in kilograms and tons, and the user can choose which.
+Dates shall be shown as day, month, year, in Central Africa Time, and stored in a standard time zone.
+5.7 Offline use and low connectivity
+NFR-OFF-01 (Must): Field agents shall be able to record grading data and visits with no connection.
+NFR-OFF-02 (Should): Suppliers shall be able to prepare lots offline.
+NFR-OFF-03 (Must): When the phone reconnects, stored data shall sync automatically with a visible sync status. The server's record of statuses and payments always takes priority over the phone's copy, and no data shall be silently overwritten.
+5.8 Maintainability, portability and scalability
+NFR-MNT-01 (Must): The code shall be kept in version control, built and deployed with a repeatable process, and configured through settings instead of values written in the code.
+NFR-MNT-02 (Must): Database changes shall be made through versioned migrations.
+NFR-MNT-03 (Must): Order, payment, fee and settlement logic shall have automated tests.
+NFR-MNT-04 (Should): The backend shall be stateless so the server can be upgraded or moved without redesign.
+NFR-MNT-05 (Should): The backend interface shall be documented so that later apps, such as an iOS app, can reuse it.
+5.9 Business rules
+BR-01: A lot can be listed only after harvest.
+BR-02: A lot is visible to buyers only after it has been graded and verified.
+BR-03: Payment must be confirmed before goods are dispatched.
+BR-04: Suppliers are paid only after the buyer accepts delivery or an administrator resolves a dispute.
+BR-05: Contact details of buyers and suppliers are not shown to each other by default. Communication goes through Cargo.
+BR-06: Fees are set by administrators and every fee shown to a user is the fee that will be charged.
+BR-07: Graded results and money records cannot be deleted or edited. Corrections are added as new records.
+6. Data Requirements
+6.1 Main data entities
+Entity
+ | Key data
+ | 
+User
+ | Name, phone, email, role, language, status, last login
+ | 
+Organisation
+ | Type (supplier or buyer), name, registration and tax details, district, contacts, verification status
+ | 
+Visit
+ | Supplier, field agent, date, notes, photos, location
+ | 
+Crop and grading template
+ | Crop name, units, measurements, grade rules
+ | 
+Lot
+ | Lot code, supplier, crop, quantity, remaining quantity, price, harvest and availability dates, location, status
+ | 
+Grading record
+ | Lot, agent, measurements, grade, photos, location, date
+ | 
+Request
+ | Buyer, crop, minimum grade, quantity, target price, delivery place and date, status
+ | 
+Offer and offer line
+ | Request, lots included, quantities, price, total, status, negotiation history
+ | 
+Order and allocation
+ | Order number, buyer, suppliers, quantities, price, fees, terms accepted, status
+ | 
+Payment and payout
+ | Order, party, amount, method, reference, status, date
+ | 
+Ledger entry
+ | Order, parties, amount, type, reference, date (append only)
+ | 
+Trip and delivery receipt
+ | Transporter, vehicle, quantity loaded, quantity and quality received, photos, confirmation
+ | 
+Invoice
+ | Order, EBM number, document copy, totals
+ | 
+Dispute
+ | Order, opener, reason, evidence, decision, outcome
+ | 
+Notification
+ | User, event, channel, message, sent and read times
+ | 
+Audit log
+ | User, action, object, before and after values, time
+ | 
+Setting
+ | Fee rates, tolerances, expiry periods, grade rules
+ | 
+6.2 Data rules
+Every record has a unique identifier and creation and update times.
+Money is stored in whole RWF and quantity in kilograms.
+Deleting is done by marking records inactive, except where the law requires removal.
+Ledger and grading records are append only.
+Files are stored once and referenced from records.
+7. Status Models
+7.1 Lot statuses
+From
+ | To
+ | Trigger
+ | Done by
+ | 
+Draft
+ | Submitted
+ | Supplier submits the lot
+ | Supplier
+ | 
+Submitted
+ | Verified
+ | Grading submitted and approved
+ | Field agent, administrator
+ | 
+Submitted
+ | Rejected
+ | Grading or documents fail review
+ | Administrator
+ | 
+Verified
+ | Reserved
+ | A buyer accepts an offer that includes the lot
+ | System
+ | 
+Reserved
+ | Verified
+ | Order cancelled, stock released
+ | System, administrator
+ | 
+Reserved
+ | Sold
+ | Delivery accepted and settled
+ | System
+ | 
+Verified
+ | Withdrawn
+ | Supplier withdraws before reservation
+ | Supplier, administrator
+ | 
+Verified
+ | Expired
+ | Expiry period passes
+ | System
+ | 
+7.2 Order statuses
+From
+ | To
+ | Trigger
+ | Done by
+ | 
+Created
+ | Confirmed
+ | Buyer and every supplier confirm and accept terms
+ | Buyer, suppliers
+ | 
+Confirmed
+ | Payment Pending
+ | Payment instructions issued
+ | System
+ | 
+Payment Pending
+ | Paid
+ | Payment confirmed
+ | Partner, administrator
+ | 
+Paid
+ | Dispatched
+ | Loading confirmed
+ | Administrator
+ | 
+Dispatched
+ | Delivered
+ | Delivery recorded
+ | Administrator, buyer
+ | 
+Delivered
+ | Accepted
+ | Buyer accepts (full or adjusted)
+ | Buyer
+ | 
+Accepted
+ | Settled
+ | Suppliers paid
+ | System, administrator
+ | 
+Delivered or Accepted
+ | Disputed
+ | Dispute opened
+ | Buyer, supplier
+ | 
+Disputed
+ | Settled
+ | Dispute resolved and payouts made
+ | Administrator
+ | 
+Created to Paid
+ | Cancelled
+ | Cancellation under the rules
+ | Administrator
+ | 
+8. Key Use Cases
+ID
+ | Use case
+ | Actor
+ | Main flow
+ | 
+UC-01
+ | List a harvest-ready lot
+ | Supplier
+ | Opens the app, creates a lot with quantity, date, location and photos, submits it, and is told when it is verified or rejected
+ | 
+UC-02
+ | Grade a lot
+ | Field agent
+ | Opens the assigned lot, takes measurements and photos, saves the grading (offline if needed), syncs, and the administrator verifies the lot
+ | 
+UC-03
+ | Request and receive a pooled offer
+ | Buyer, administrator
+ | Buyer posts a request, administrator combines verified lots from several suppliers into one offer, buyer accepts and the stock is reserved
+ | 
+UC-04
+ | Pay and dispatch
+ | Buyer, administrator
+ | Buyer confirms terms and pays, payment is confirmed, administrator records the trip and loading, and the order is dispatched
+ | 
+UC-05
+ | Accept delivery and settle
+ | Buyer, administrator
+ | Buyer records the quantity and quality received and accepts, the system calculates payouts, and suppliers are paid and notified
+ | 
+UC-06
+ | Resolve a dispute
+ | Buyer or supplier, administrator
+ | A party opens a dispute with evidence, settlement is paused, the administrator decides and all parties are told
+ | 
+9. Release and Acceptance Criteria
+V1 is ready for release when:
+Every Must requirement is built and has passed testing.
+A complete trade (listing, grading, request, pooled offer, payment, delivery, acceptance and settlement) has been run end to end on a production-like setup without manual database changes.
+A group of test users has completed several full trades, and every issue found has been fixed or recorded.
+A field agent has graded a lot offline and synced it successfully.
+The performance, security and backup restore checks in section 5 have been carried out.
+The privacy policy and terms of use are published.
+The Android app has passed Google Play review, including any required closed testing period.
+The administrator can run the marketplace from the back office without developer help.
+Testing shall include automated tests for the money and order logic, integration tests for outside services, and user acceptance testing with real suppliers, field agents, buyers and administrators.
+10. Future Versions (Out of Scope for V1)
+Feature
+ | Why it is later
+ | 
+Pre-harvest forward contracts
+ | Needs trust, history and a legal contract process
+ | 
+Reverse auctions and tendering
+ | Needs enough buyers and suppliers
+ | 
+Automatic pooling algorithm
+ | V1 pools with administrator help to learn the real rules first
+ | 
+Buyer credit terms (Net-15 to Net-60)
+ | Needs a bank partner and working capital
+ | 
+Direct EBM integration
+ | Depends on the RRA process and access
+ | 
+Transporter application and live tracking
+ | V1 records trips through administrators
+ | 
+Cold-chain temperature tracking
+ | Needs equipment and partners
+ | 
+iOS application
+ | Android is the first release
+ | 
+Data and market insight products
+ | Needs enough trade history
+ | 
+11. Risks and Open Decisions
+Item
+ | Why it matters
+ | Needed by
+ | 
+Payment partner and onboarding time
+ | Payment is the core of trust, and onboarding can take weeks
+ | Before building the payment module
+ | 
+How funds are held (partner account or direct payment)
+ | Affects licensing and legal duties
+ | Before launch, with legal advice
+ | 
+EBM invoice route
+ | Decides whether invoices are entered manually or integrated
+ | Before the first paid trade
+ | 
+First crop and grading standards
+ | Decides the grading templates and rules
+ | Before building grading
+ | 
+Offline sync scope
+ | Offline work adds complexity and testing time
+ | Before building the mobile app
+ | 
+Record retention period
+ | Required by law
+ | Before launch
+ | 
+Server location and speed from Kigali
+ | Affects response time
+ | Before choosing the server
+ | 
+Appendix A. Traceability to the Cargo business plan
+Business goal
+ | Requirement groups
+ | 
+One reliable order from many cooperatives
+ | FR-REQ, FR-ORD-02, FR-ADM-04
+ | 
+Verified quality
+ | FR-QA, FR-DEL-03, FR-DEL-04
+ | 
+Secure and fast payment
+ | FR-PAY, BR-03, BR-04
+ | 
+Tax-ready paperwork
+ | FR-INV
+ | 
+Trust and transparency for investors
+ | FR-RPT, FR-ADM-05, NFR-REL
+ | 
+Low running cost
+ | C-01, NFR-MNT-04
+ | 
+Protecting the Cargo business from being bypassed
+ | BR-05, NFR-PRV-03
+ | 
