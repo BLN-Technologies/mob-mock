@@ -15,39 +15,47 @@ const KEYS = {
 
 // In-memory fallback map in case native AsyncStorage module is unavailable
 const memoryFallback = new Map<string, string>();
+const ASYNC_STORAGE_TIMEOUT_MS = 400;
 
-async function safeGetItem(key: string): Promise<string | null> {
+function withTimeout<T>(promise: Promise<T>, fallback: T): Promise<T> {
+  return Promise.race([
+    promise,
+    new Promise<T>(resolve => setTimeout(() => resolve(fallback), ASYNC_STORAGE_TIMEOUT_MS)),
+  ]).catch(() => fallback);
+}
+
+export async function safeGetItem(key: string): Promise<string | null> {
   try {
-    const value = await AsyncStorage.getItem(key);
+    const value = await withTimeout(AsyncStorage.getItem(key), null);
     return value ?? memoryFallback.get(key) ?? null;
-  } catch (err) {
+  } catch {
     return memoryFallback.get(key) ?? null;
   }
 }
 
-async function safeSetItem(key: string, value: string): Promise<void> {
+export async function safeSetItem(key: string, value: string): Promise<void> {
   memoryFallback.set(key, value);
   try {
-    await AsyncStorage.setItem(key, value);
-  } catch (err) {
+    await withTimeout(AsyncStorage.setItem(key, value), undefined);
+  } catch {
     // Non-fatal, cached in memoryFallback
   }
 }
 
-async function safeRemoveItem(key: string): Promise<void> {
+export async function safeRemoveItem(key: string): Promise<void> {
   memoryFallback.delete(key);
   try {
-    await AsyncStorage.removeItem(key);
-  } catch (err) {
+    await withTimeout(AsyncStorage.removeItem(key), undefined);
+  } catch {
     // Non-fatal
   }
 }
 
-async function safeClear(): Promise<void> {
+export async function safeClear(): Promise<void> {
   memoryFallback.clear();
   try {
-    await AsyncStorage.clear();
-  } catch (err) {
+    await withTimeout(AsyncStorage.clear(), undefined);
+  } catch {
     // Non-fatal
   }
 }

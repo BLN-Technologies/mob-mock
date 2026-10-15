@@ -13,14 +13,18 @@ export const OfflineBanner: React.FC = () => {
   const [syncing, setSyncing] = useState(false);
 
   const checkQueue = async () => {
-    const queue = await localStorage.getOfflineQueue();
-    const pending = queue.filter(q => q.status === 'QUEUED' || q.status === 'FAILED');
-    setQueuedCount(pending.length);
+    try {
+      const queue = await localStorage.getOfflineQueue();
+      const pending = queue.filter(q => q.status === 'QUEUED' || q.status === 'FAILED');
+      setQueuedCount(prev => (prev === pending.length ? prev : pending.length));
+    } catch {
+      // Ignored
+    }
   };
 
   useEffect(() => {
     checkQueue();
-    const interval = setInterval(checkQueue, 3000);
+    const interval = setInterval(checkQueue, 10000);
     return () => clearInterval(interval);
   }, []);
 

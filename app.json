@@ -7,8 +7,9 @@
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
     "splash": {
-      "backgroundColor": "#0FAA38",
-      "resizeMode": "contain"
+      "image": "./assets/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#0B3B24"
     },
     "ios": {
       "supportsTablet": false
@@ -16,10 +17,15 @@
     "android": {
       "package": "rw.cargo.mobile",
       "adaptiveIcon": {
-        "backgroundColor": "#0FAA38",
+        "backgroundColor": "#0B3B24",
         "foregroundImage": "./assets/android-icon-foreground.png",
         "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"
+      },
+      "splash": {
+        "image": "./assets/splash-icon.png",
+        "resizeMode": "contain",
+        "backgroundColor": "#0B3B24"
       },
       "predictiveBackGestureEnabled": false
     },

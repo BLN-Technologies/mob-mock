@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { safeGetItem, safeSetItem } from '../data/local/storage';
 import { en } from './en';
 import { rw } from './rw';
 
@@ -23,7 +23,7 @@ export const I18nProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [language, setLanguageState] = useState<Language>('rw'); // Default Kinyarwanda as required by SRS
 
   useEffect(() => {
-    AsyncStorage.getItem(LANGUAGE_STORAGE_KEY)
+    safeGetItem(LANGUAGE_STORAGE_KEY)
       .then(saved => {
         if (saved === 'en' || saved === 'rw') {
           setLanguageState(saved);
@@ -37,7 +37,7 @@ export const I18nProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const setLanguage = async (newLang: Language) => {
     setLanguageState(newLang);
     try {
-      await AsyncStorage.setItem(LANGUAGE_STORAGE_KEY, newLang);
+      await safeSetItem(LANGUAGE_STORAGE_KEY, newLang);
     } catch {
       // Ignored
     }

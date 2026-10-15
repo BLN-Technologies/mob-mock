@@ -1,6 +1,5 @@
 import React, { useEffect } from 'react';
-import { View, Text, StyleSheet, ActivityIndicator } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import { View, Text, StyleSheet, ActivityIndicator, Image } from 'react-native';
 import { colors, radii, typography } from '../../theme/tokens';
 import { useTranslation } from '../../i18n';
 import { localStorage } from '../../data/local/storage';
@@ -48,7 +47,11 @@ export const SplashScreen: React.FC<SplashScreenProps> = ({ onBootstrapComplete 
   return (
     <View style={styles.container}>
       <View style={styles.logoBadge}>
-        <Ionicons name="leaf" size={44} color="#FFFFFF" />
+        <Image
+          source={require('../../../assets/splash-icon.png')}
+          style={styles.logoImage}
+          resizeMode="cover"
+        />
       </View>
       <Text style={styles.brandTitle}>{t.common.appName}</Text>
       <Text style={styles.brandTagline}>{t.common.tagline}</Text>
@@ -69,18 +72,25 @@ const styles = StyleSheet.create({
     padding: 24,
   },
   logoBadge: {
-    width: 88,
-    height: 88,
-    borderRadius: 44,
-    backgroundColor: colors.primary,
+    width: 108,
+    height: 108,
+    borderRadius: 28,
+    overflow: 'hidden',
+    backgroundColor: colors.surface,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 16,
+    marginBottom: 20,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 10,
-    elevation: 8,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.35,
+    shadowRadius: 12,
+    elevation: 10,
+    borderWidth: 2,
+    borderColor: '#06EFAC',
+  },
+  logoImage: {
+    width: '100%',
+    height: '100%',
   },
   brandTitle: {
     fontSize: 40,
