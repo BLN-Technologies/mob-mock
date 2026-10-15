@@ -12,6 +12,10 @@ try {
   execSync('node dist-tests/tests/run-domain-tests.js', { stdio: 'inherit' });
 } finally {
   if (fs.existsSync('dist-tests')) {
-    fs.rmSync('dist-tests', { recursive: true, force: true });
+    try {
+      fs.rmSync('dist-tests', { recursive: true, force: true, maxRetries: 3, retryDelay: 200 });
+    } catch {
+      // Ignore Windows transient file lock
+    }
   }
 }

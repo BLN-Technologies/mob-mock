@@ -7,6 +7,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   TouchableOpacity,
+  Modal,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -30,6 +31,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
   const [error, setError] = useState<string | null>(null);
   const [showOtp, setShowOtp] = useState(false);
   const [pendingUser, setPendingUser] = useState<User | null>(null);
+  const [showSettingsModal, setShowSettingsModal] = useState(false);
 
   const handleLogin = async () => {
     setError(null);
@@ -73,143 +75,227 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
   };
 
   return (
-    <SafeAreaView style={styles.safeArea}>
+    <SafeAreaView style={styles.safeArea} edges={['top', 'bottom', 'left', 'right']}>
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         style={styles.keyboardView}
       >
-        <ScrollView contentContainerStyle={styles.scrollContent}>
-          {/* Top Language Toggle */}
-          <View style={styles.topBar}>
-            <TouchableOpacity
-              style={styles.langPill}
-              onPress={toggleLanguage}
-              activeOpacity={0.8}
-              accessibilityRole="button"
-            >
-              <Ionicons name="globe-outline" size={14} color="#FFFFFF" />
-              <Text style={styles.langPillText}>
-                {language === 'rw' ? 'English' : 'Ikinyarwanda'}
-              </Text>
-            </TouchableOpacity>
-          </View>
+        <ScrollView
+          contentContainerStyle={styles.scrollContent}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+        >
+          <View style={styles.contentWrapper}>
+            {/* Top Bar with Language Pill and Settings Button */}
+            <View style={styles.topBar}>
+              <TouchableOpacity
+                style={styles.langPill}
+                onPress={toggleLanguage}
+                activeOpacity={0.8}
+                accessibilityRole="button"
+                accessibilityLabel="Toggle Language"
+              >
+                <Ionicons name="globe-outline" size={15} color="#FFFFFF" />
+                <Text style={styles.langPillText}>
+                  {language === 'rw' ? 'English' : 'Ikinyarwanda'}
+                </Text>
+              </TouchableOpacity>
 
-          {/* Brand Header */}
-          <View style={styles.brandContainer}>
-            <View style={styles.logoBadge}>
-              <Ionicons name="leaf" size={28} color="#FFFFFF" />
+              <TouchableOpacity
+                style={styles.settingsIconBtn}
+                onPress={() => setShowSettingsModal(true)}
+                activeOpacity={0.8}
+                accessibilityRole="button"
+                accessibilityLabel="App Settings and Information"
+              >
+                <Ionicons name="settings-outline" size={18} color="#FFFFFF" />
+              </TouchableOpacity>
             </View>
-            <Text style={styles.appName}>{t.common.appName}</Text>
-            <Text style={styles.tagline}>{t.common.tagline}</Text>
-          </View>
 
-          {/* Form Card */}
-          <View style={styles.formCard}>
-            <Text style={styles.formTitle}>{t.auth.welcomeBack}</Text>
-            <Text style={styles.formSubtitle}>{t.auth.signInPrompt}</Text>
-
-            {error ? (
-              <View style={styles.errorBox}>
-                <Ionicons name="alert-circle" size={18} color={colors.danger} />
-                <Text style={styles.errorBoxText}>{error}</Text>
+            {/* Brand Header */}
+            <View style={styles.brandContainer}>
+              <View style={styles.logoBadge}>
+                <Ionicons name="leaf" size={28} color="#FFFFFF" />
               </View>
-            ) : null}
+              <Text style={styles.appName}>{t.common.appName}</Text>
+              <Text style={styles.tagline}>{t.common.tagline}</Text>
+            </View>
 
-            <FormField
-              label={t.auth.phoneOrEmail}
-              value={identifier}
-              onChangeText={setIdentifier}
-              autoCapitalize="none"
-              placeholder="+250 788..."
-              icon="call-outline"
-            />
+            {/* Form Card */}
+            <View style={styles.formCard}>
+              <Text style={styles.formTitle}>{t.auth.welcomeBack}</Text>
+              <Text style={styles.formSubtitle}>{t.auth.signInPrompt}</Text>
 
-            <FormField
-              label={t.auth.password}
-              value={password}
-              onChangeText={setPassword}
-              secureTextEntry
-              placeholder="••••••••"
-              icon="lock-closed-outline"
-            />
+              {error ? (
+                <View style={styles.errorBox}>
+                  <Ionicons name="alert-circle" size={18} color={colors.danger} />
+                  <Text style={styles.errorBoxText}>{error}</Text>
+                </View>
+              ) : null}
 
-            <Button
-              title={loading ? t.auth.loggingIn : t.auth.login}
-              onPress={handleLogin}
-              loading={loading}
-              size="large"
-              style={styles.submitBtn}
-              fullWidth
-            />
+              <FormField
+                label={t.auth.phoneOrEmail}
+                value={identifier}
+                onChangeText={setIdentifier}
+                autoCapitalize="none"
+                placeholder="+250 788..."
+                icon="call-outline"
+              />
 
-            {/* Quick Demo Fill Buttons with clean vector icons */}
-            <View style={styles.demoSection}>
-              <Text style={styles.demoSectionTitle}>{t.auth.quickFill}</Text>
-              <View style={styles.demoButtonsContainer}>
-                <TouchableOpacity
-                  style={styles.demoChip}
-                  onPress={() => quickFill('+250788111222')}
-                  activeOpacity={0.8}
-                >
-                  <View style={[styles.demoIconWrap, { backgroundColor: '#DCFCE7' }]}>
-                    <Ionicons name="leaf" size={16} color={colors.primary} />
-                  </View>
-                  <View style={styles.demoTextWrap}>
-                    <Text style={styles.demoChipTitle}>{t.auth.supplierDemo}</Text>
-                    <Text style={styles.demoChipPhone}>+250 788 111 222 (Cooperative)</Text>
-                  </View>
-                  <Ionicons name="arrow-forward" size={14} color={colors.neutralLight} />
-                </TouchableOpacity>
+              <FormField
+                label={t.auth.password}
+                value={password}
+                onChangeText={setPassword}
+                secureTextEntry
+                placeholder="••••••••"
+                icon="lock-closed-outline"
+              />
 
-                <TouchableOpacity
-                  style={styles.demoChip}
-                  onPress={() => quickFill('+250788333444')}
-                  activeOpacity={0.8}
-                >
-                  <View style={[styles.demoIconWrap, { backgroundColor: '#FEF3C7' }]}>
-                    <Ionicons name="clipboard" size={16} color={colors.warningDark} />
-                  </View>
-                  <View style={styles.demoTextWrap}>
-                    <Text style={styles.demoChipTitle}>{t.auth.agentDemo}</Text>
-                    <Text style={styles.demoChipPhone}>+250 788 333 444 (Field Agent)</Text>
-                  </View>
-                  <Ionicons name="arrow-forward" size={14} color={colors.neutralLight} />
-                </TouchableOpacity>
+              <Button
+                title={loading ? t.auth.loggingIn : t.auth.login}
+                onPress={handleLogin}
+                loading={loading}
+                size="large"
+                style={styles.submitBtn}
+                fullWidth
+              />
 
-                <TouchableOpacity
-                  style={styles.demoChip}
-                  onPress={() => quickFill('+250788555666')}
-                  activeOpacity={0.8}
-                >
-                  <View style={[styles.demoIconWrap, { backgroundColor: '#DBEAFE' }]}>
-                    <Ionicons name="business" size={16} color={colors.infoDark} />
-                  </View>
-                  <View style={styles.demoTextWrap}>
-                    <Text style={styles.demoChipTitle}>{t.auth.buyerDemo}</Text>
-                    <Text style={styles.demoChipPhone}>+250 788 555 666 (Millers Ltd)</Text>
-                  </View>
-                  <Ionicons name="arrow-forward" size={14} color={colors.neutralLight} />
-                </TouchableOpacity>
+              {/* Quick Demo Fill Buttons */}
+              <View style={styles.demoSection}>
+                <View style={styles.demoHeaderRow}>
+                  <Text style={styles.demoSectionTitle}>{t.auth.quickFill}</Text>
+                  <Text style={styles.demoSectionHint}>Tap to load credentials</Text>
+                </View>
 
-                <TouchableOpacity
-                  style={styles.demoChip}
-                  onPress={() => quickFill('+250788999000')}
-                  activeOpacity={0.8}
-                >
-                  <View style={[styles.demoIconWrap, { backgroundColor: '#F1F5F9' }]}>
-                    <Ionicons name="settings" size={16} color={colors.neutralDark} />
-                  </View>
-                  <View style={styles.demoTextWrap}>
-                    <Text style={styles.demoChipTitle}>{t.auth.adminDemo}</Text>
-                    <Text style={styles.demoChipPhone}>+250 788 999 000 (Admin)</Text>
-                  </View>
-                  <Ionicons name="arrow-forward" size={14} color={colors.neutralLight} />
-                </TouchableOpacity>
+                <View style={styles.demoButtonsContainer}>
+                  <TouchableOpacity
+                    style={styles.demoChip}
+                    onPress={() => quickFill('+250788111222')}
+                    activeOpacity={0.7}
+                  >
+                    <View style={[styles.demoIconWrap, { backgroundColor: '#DCFCE7' }]}>
+                      <Ionicons name="leaf" size={16} color={colors.primary} />
+                    </View>
+                    <View style={styles.demoTextWrap}>
+                      <Text style={styles.demoChipTitle}>{t.auth.supplierDemo}</Text>
+                      <Text style={styles.demoChipPhone}>+250 788 111 222 (Cooperative)</Text>
+                    </View>
+                    <Ionicons name="arrow-forward" size={14} color={colors.neutralLight} />
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={styles.demoChip}
+                    onPress={() => quickFill('+250788333444')}
+                    activeOpacity={0.7}
+                  >
+                    <View style={[styles.demoIconWrap, { backgroundColor: '#FEF3C7' }]}>
+                      <Ionicons name="clipboard" size={16} color={colors.warningDark} />
+                    </View>
+                    <View style={styles.demoTextWrap}>
+                      <Text style={styles.demoChipTitle}>{t.auth.agentDemo}</Text>
+                      <Text style={styles.demoChipPhone}>+250 788 333 444 (Field Agent)</Text>
+                    </View>
+                    <Ionicons name="arrow-forward" size={14} color={colors.neutralLight} />
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={styles.demoChip}
+                    onPress={() => quickFill('+250788555666')}
+                    activeOpacity={0.7}
+                  >
+                    <View style={[styles.demoIconWrap, { backgroundColor: '#DBEAFE' }]}>
+                      <Ionicons name="business" size={16} color={colors.infoDark} />
+                    </View>
+                    <View style={styles.demoTextWrap}>
+                      <Text style={styles.demoChipTitle}>{t.auth.buyerDemo}</Text>
+                      <Text style={styles.demoChipPhone}>+250 788 555 666 (Millers Ltd)</Text>
+                    </View>
+                    <Ionicons name="arrow-forward" size={14} color={colors.neutralLight} />
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={styles.demoChip}
+                    onPress={() => quickFill('+250788999000')}
+                    activeOpacity={0.7}
+                  >
+                    <View style={[styles.demoIconWrap, { backgroundColor: '#F1F5F9' }]}>
+                      <Ionicons name="settings" size={16} color={colors.neutralDark} />
+                    </View>
+                    <View style={styles.demoTextWrap}>
+                      <Text style={styles.demoChipTitle}>{t.auth.adminDemo}</Text>
+                      <Text style={styles.demoChipPhone}>+250 788 999 000 (Admin)</Text>
+                    </View>
+                    <Ionicons name="arrow-forward" size={14} color={colors.neutralLight} />
+                  </TouchableOpacity>
+                </View>
               </View>
             </View>
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
+
+      {/* Settings / System Info Modal */}
+      <Modal
+        visible={showSettingsModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowSettingsModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.settingsModalCard}>
+            <View style={styles.modalHeader}>
+              <View style={styles.modalTitleRow}>
+                <Ionicons name="settings-sharp" size={20} color={colors.primary} />
+                <Text style={styles.modalTitle}>System Settings & Info</Text>
+              </View>
+              <TouchableOpacity
+                onPress={() => setShowSettingsModal(false)}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              >
+                <Ionicons name="close" size={22} color={colors.neutralGray} />
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.modalBody}>
+              <View style={styles.infoRow}>
+                <Text style={styles.infoLabel}>Platform</Text>
+                <Text style={styles.infoValue}>Cargo Rwanda Marketplace V1</Text>
+              </View>
+              <View style={styles.infoRow}>
+                <Text style={styles.infoLabel}>Server Gateway</Text>
+                <View style={styles.statusPill}>
+                  <View style={styles.statusDot} />
+                  <Text style={styles.statusText}>Connected</Text>
+                </View>
+              </View>
+              <View style={styles.infoRow}>
+                <Text style={styles.infoLabel}>Timezone</Text>
+                <Text style={styles.infoValue}>Central Africa Time (CAT, UTC+2)</Text>
+              </View>
+              <View style={styles.infoRow}>
+                <Text style={styles.infoLabel}>Language</Text>
+                <TouchableOpacity
+                  style={styles.langToggleBtn}
+                  onPress={toggleLanguage}
+                  activeOpacity={0.8}
+                >
+                  <Text style={styles.langToggleBtnText}>
+                    {language === 'rw' ? 'Kinyarwanda (Changer)' : 'English (Change)'}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+
+            <Button
+              title="Close"
+              onPress={() => setShowSettingsModal(false)}
+              variant="secondary"
+              fullWidth
+              style={styles.modalCloseBtn}
+            />
+          </View>
+        </View>
+      </Modal>
 
       <OtpModal
         visible={showOtp}
@@ -230,22 +316,30 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     flexGrow: 1,
-    justifyContent: 'center',
-    padding: spacing.lg,
+    paddingHorizontal: spacing.md,
+    paddingTop: Platform.OS === 'android' ? spacing.md : spacing.sm,
+    paddingBottom: spacing.xxl,
+    alignItems: 'center',
+  },
+  contentWrapper: {
+    width: '100%',
+    maxWidth: 440,
   },
   topBar: {
     flexDirection: 'row',
-    justifyContent: 'flex-end',
-    marginBottom: spacing.xs,
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: spacing.sm,
+    paddingHorizontal: spacing.xs,
   },
   langPill: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: 'rgba(255, 255, 255, 0.2)',
-    paddingVertical: 5,
-    paddingHorizontal: 10,
+    paddingVertical: 6,
+    paddingHorizontal: 12,
     borderRadius: radii.full,
-    gap: 4,
+    gap: 6,
   },
   langPillText: {
     ...typography.caption,
@@ -253,36 +347,45 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#FFFFFF',
   },
+  settingsIconBtn: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: 'rgba(255, 255, 255, 0.18)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   brandContainer: {
     alignItems: 'center',
-    marginBottom: spacing.lg,
+    marginBottom: spacing.md,
+    marginTop: spacing.xs,
   },
   logoBadge: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
+    width: 56,
+    height: 56,
+    borderRadius: 28,
     backgroundColor: colors.primary,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: spacing.sm,
+    marginBottom: spacing.xs,
     ...shadows.md,
   },
   appName: {
     ...typography.h1,
-    fontSize: 32,
+    fontSize: 28,
     color: '#FFFFFF',
     letterSpacing: 0.5,
   },
   tagline: {
     ...typography.caption,
-    fontSize: 14,
+    fontSize: 13,
     color: '#DCFCE7',
     marginTop: 2,
     fontWeight: '500',
   },
   formCard: {
     backgroundColor: '#FFFFFF',
-    borderRadius: radii.lg,
+    borderRadius: radii.xl,
     padding: spacing.lg,
     ...shadows.lg,
   },
@@ -320,13 +423,23 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: colors.borderLight,
   },
+  demoHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: spacing.sm,
+  },
   demoSectionTitle: {
     ...typography.caption,
     fontWeight: '700',
     color: colors.neutralGray,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
-    marginBottom: spacing.sm,
+  },
+  demoSectionHint: {
+    ...typography.caption,
+    fontSize: 10,
+    color: colors.neutralLight,
   },
   demoButtonsContainer: {
     gap: spacing.xs + 2,
@@ -362,5 +475,97 @@ const styles = StyleSheet.create({
     ...typography.caption,
     fontSize: 11,
     color: colors.neutralGray,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(15, 23, 42, 0.65)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: spacing.lg,
+  },
+  settingsModalCard: {
+    width: '100%',
+    maxWidth: 380,
+    backgroundColor: '#FFFFFF',
+    borderRadius: radii.lg,
+    padding: spacing.lg,
+    ...shadows.lg,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    borderBottomWidth: 1,
+    borderBottomColor: colors.borderLight,
+    paddingBottom: spacing.sm,
+    marginBottom: spacing.md,
+  },
+  modalTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs + 2,
+  },
+  modalTitle: {
+    ...typography.h3,
+    fontSize: 16,
+    color: colors.neutralHeadings,
+  },
+  modalBody: {
+    gap: spacing.md,
+    marginBottom: spacing.lg,
+  },
+  infoRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  infoLabel: {
+    ...typography.caption,
+    fontSize: 12,
+    color: colors.neutralGray,
+  },
+  infoValue: {
+    ...typography.caption,
+    fontSize: 12,
+    fontWeight: '600',
+    color: colors.neutralHeadings,
+  },
+  statusPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.successLight,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: radii.full,
+    gap: 5,
+  },
+  statusDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: colors.success,
+  },
+  statusText: {
+    ...typography.caption,
+    fontSize: 11,
+    fontWeight: '700',
+    color: colors.successDark,
+  },
+  langToggleBtn: {
+    backgroundColor: colors.surfaceSubtle,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: radii.sm,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  langToggleBtnText: {
+    ...typography.caption,
+    fontSize: 11,
+    fontWeight: '600',
+    color: colors.primary,
+  },
+  modalCloseBtn: {
+    marginTop: spacing.xs,
   },
 });
