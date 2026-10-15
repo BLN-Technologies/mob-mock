@@ -4,6 +4,7 @@
   "description": "Cargo V1 Mobile - Managed Agricultural Marketplace for Rwanda",
   "main": "index.ts",
   "dependencies": {
+    "@expo/metro-runtime": "^58.0.14",
     "@expo/vector-icons": "^15.1.1",
     "@react-native-async-storage/async-storage": "^3.1.1",
     "@react-navigation/bottom-tabs": "^7.21.0",
@@ -12,9 +13,11 @@
     "expo": "~57.0.30",
     "expo-status-bar": "~57.0.1",
     "react": "19.2.3",
+    "react-dom": "^19.2.3",
     "react-native": "0.86.3",
     "react-native-safe-area-context": "^5.10.1",
-    "react-native-screens": "^4.30.0"
+    "react-native-screens": "^4.30.0",
+    "react-native-web": "^0.21.4"
   },
   "devDependencies": {
     "@types/node": "^26.6.5",
