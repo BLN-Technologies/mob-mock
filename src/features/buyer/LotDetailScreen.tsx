@@ -36,7 +36,7 @@ export const LotDetailScreen: React.FC<LotDetailScreenProps> = ({
     <ScrollView style={styles.container} contentContainerStyle={styles.scrollContent}>
       <TouchableOpacity onPress={onBack} style={styles.backBtn} activeOpacity={0.7}>
         <Ionicons name="arrow-back" size={18} color={colors.primary} />
-        <Text style={styles.backBtnText}>Back to Catalogue</Text>
+        <Text style={styles.backBtnText}>{t.buyer.backToCatalogue}</Text>
       </TouchableOpacity>
 
       <Image
@@ -106,7 +106,7 @@ export const LotDetailScreen: React.FC<LotDetailScreenProps> = ({
         </View>
 
         <Button
-          title="Include in Sourcing Request"
+          title={t.buyer.includeInRequest}
           onPress={onRequestMatch}
           icon={<Ionicons name="cart-outline" size={18} color="#FFFFFF" />}
           size="large"

@@ -121,7 +121,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
               onChangeText={setIdentifier}
               autoCapitalize="none"
               placeholder="+250 788..."
-              prefix="📞"
+              icon="call-outline"
             />
 
             <FormField
@@ -130,7 +130,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
               onChangeText={setPassword}
               secureTextEntry
               placeholder="••••••••"
-              prefix="🔒"
+              icon="lock-closed-outline"
             />
 
             <Button

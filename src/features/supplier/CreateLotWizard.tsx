@@ -217,7 +217,7 @@ export const CreateLotWizard: React.FC<CreateLotWizardProps> = ({
             value={harvestDate}
             onChangeText={setHarvestDate}
             placeholder="YYYY-MM-DD"
-            prefix="📅"
+            icon="calendar-outline"
             helper="Must be today or earlier (BR-01 strict rule)"
           />
 
@@ -226,7 +226,7 @@ export const CreateLotWizard: React.FC<CreateLotWizardProps> = ({
             value={availabilityDate}
             onChangeText={setAvailabilityDate}
             placeholder="YYYY-MM-DD"
-            prefix="📦"
+            icon="cube-outline"
             helper="Date produce is packaged & ready for warehouse pickup"
           />
         </View>
@@ -239,7 +239,7 @@ export const CreateLotWizard: React.FC<CreateLotWizardProps> = ({
             value={pickupDistrict}
             onChangeText={setPickupDistrict}
             placeholder="e.g. Nyagatare, Huye, Musanze"
-            prefix="📍"
+            icon="location-outline"
           />
 
           <FormField
@@ -247,7 +247,7 @@ export const CreateLotWizard: React.FC<CreateLotWizardProps> = ({
             value={pickupSector}
             onChangeText={setPickupSector}
             placeholder="e.g. Karangazi"
-            prefix="📍"
+            icon="location-outline"
           />
 
           <FormField

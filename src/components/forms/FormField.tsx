@@ -16,6 +16,7 @@ interface FormFieldProps extends TextInputProps {
   helper?: string;
   prefix?: string;
   suffix?: string;
+  icon?: keyof typeof Ionicons.glyphMap;
   containerStyle?: ViewStyle;
 }
 
@@ -25,6 +26,7 @@ export const FormField: React.FC<FormFieldProps> = ({
   helper,
   prefix,
   suffix,
+  icon,
   containerStyle,
   style,
   ...props
@@ -39,11 +41,15 @@ export const FormField: React.FC<FormFieldProps> = ({
           error ? styles.inputWrapperError : undefined,
         ]}
       >
-        {prefix && (
+        {icon ? (
+          <View style={styles.iconAdornment}>
+            <Ionicons name={icon} size={18} color="#64748B" />
+          </View>
+        ) : prefix ? (
           <View style={styles.adornment}>
             <Text style={styles.adornmentText}>{prefix}</Text>
           </View>
-        )}
+        ) : null}
 
         <TextInput
           style={[styles.input, style]}
@@ -52,7 +58,7 @@ export const FormField: React.FC<FormFieldProps> = ({
         />
 
         {suffix && (
-          <View style={styles.adornment}>
+          <View style={styles.suffixAdornment}>
             <Text style={styles.adornmentText}>{suffix}</Text>
           </View>
         )}
@@ -102,6 +108,13 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: colors.neutralDark,
   },
+  iconAdornment: {
+    paddingLeft: spacing.md,
+    paddingRight: spacing.xs,
+    height: '100%',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
   adornment: {
     paddingHorizontal: spacing.md,
     backgroundColor: colors.surfaceSubtle,
@@ -110,6 +123,15 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     borderRightWidth: 1,
     borderRightColor: colors.borderLight,
+  },
+  suffixAdornment: {
+    paddingHorizontal: spacing.md,
+    backgroundColor: colors.surfaceSubtle,
+    height: '100%',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderLeftWidth: 1,
+    borderLeftColor: colors.borderLight,
   },
   adornmentText: {
     ...typography.caption,

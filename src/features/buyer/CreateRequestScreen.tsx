@@ -41,7 +41,7 @@ export const CreateRequestScreen: React.FC<CreateRequestScreenProps> = ({
     setLoading(false);
     Alert.alert(
       t.common.appName,
-      'Your request for 20,000 kg Maize has been submitted to Cargo operations. Cargo will coordinate verified supply and pool offers for you (FR-REQ-02, FR-REQ-03).',
+      t.buyer.requestSubmitted,
       [{ text: t.common.done, onPress: onSuccess }]
     );
   };
@@ -51,7 +51,7 @@ export const CreateRequestScreen: React.FC<CreateRequestScreenProps> = ({
       <View style={styles.headerBox}>
         <Text style={styles.title}>{t.buyer.postRequest}</Text>
         <Text style={styles.subtitle}>
-          Specify produce requirements for Cargo operations to pool from verified cooperatives.
+          {t.buyer.requestSubtitle}
         </Text>
       </View>
 
@@ -70,14 +70,14 @@ export const CreateRequestScreen: React.FC<CreateRequestScreenProps> = ({
       />
 
       <FormField
-        label="Minimum Acceptable Quality Grade"
+        label={t.supplier.qualityGrade}
         value={minGrade}
         onChangeText={setMinGrade}
         placeholder="Grade A, Grade B"
       />
 
       <FormField
-        label="Required Quantity (kg)"
+        label={t.buyer.requiredQuantity}
         value={quantityKg}
         onChangeText={setQuantityKg}
         keyboardType="numeric"
@@ -87,7 +87,7 @@ export const CreateRequestScreen: React.FC<CreateRequestScreenProps> = ({
       />
 
       <FormField
-        label="Target Price (RWF / kg)"
+        label={t.buyer.targetPrice}
         value={targetPriceRwf}
         onChangeText={setTargetPriceRwf}
         keyboardType="numeric"
@@ -97,31 +97,31 @@ export const CreateRequestScreen: React.FC<CreateRequestScreenProps> = ({
       />
 
       <FormField
-        label="Delivery District"
+        label={t.buyer.deliveryDistrict}
         value={deliveryDistrict}
         onChangeText={setDeliveryDistrict}
         placeholder="e.g. Kigali (Gasabo)"
-        prefix="📍"
+        icon="location-outline"
       />
 
       <FormField
-        label="Delivery Sector"
+        label={t.buyer.deliverySector}
         value={deliverySector}
         onChangeText={setDeliverySector}
         placeholder="e.g. Gisozi"
-        prefix="📍"
+        icon="location-outline"
       />
 
       <FormField
-        label="Required Delivery Date"
+        label={t.buyer.requiredDeliveryDate}
         value={requiredDate}
         onChangeText={setRequiredDate}
         placeholder="YYYY-MM-DD"
-        prefix="📅"
+        icon="calendar-outline"
       />
 
       <FormField
-        label="Procurement Field Notes"
+        label={t.buyer.procurementNotes}
         value={notes}
         onChangeText={setNotes}
         multiline
@@ -136,7 +136,7 @@ export const CreateRequestScreen: React.FC<CreateRequestScreenProps> = ({
           style={styles.btnHalf}
         />
         <Button
-          title="Submit Sourcing Request"
+          title={t.buyer.submitRequest}
           onPress={handleSubmit}
           loading={loading}
           style={styles.btnHalf}
