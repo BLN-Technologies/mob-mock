@@ -14,14 +14,36 @@ export const SplashScreen: React.FC<SplashScreenProps> = ({ onBootstrapComplete 
   const { t } = useTranslation();
 
   useEffect(() => {
+    let isMounted = true;
+    const timeout = setTimeout(() => {
+      if (isMounted) {
+        onBootstrapComplete(null);
+      }
+    }, 2000); // 2s maximum hard safeguard
+
     const bootstrap = async () => {
-      // Simulate brief branded splash duration (800ms)
-      await new Promise(res => setTimeout(res, 800));
-      const user = await localStorage.getSessionUser();
-      onBootstrapComplete(user);
+      try {
+        await new Promise(res => setTimeout(res, 800));
+        const user = await localStorage.getSessionUser();
+        if (isMounted) {
+          clearTimeout(timeout);
+          onBootstrapComplete(user);
+        }
+      } catch (err) {
+        if (isMounted) {
+          clearTimeout(timeout);
+          onBootstrapComplete(null);
+        }
+      }
     };
+
     bootstrap();
-  }, []);
+
+    return () => {
+      isMounted = false;
+      clearTimeout(timeout);
+    };
+  }, [onBootstrapComplete]);
 
   return (
     <View style={styles.container}>

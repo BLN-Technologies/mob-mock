@@ -23,16 +23,24 @@ export const I18nProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [language, setLanguageState] = useState<Language>('rw'); // Default Kinyarwanda as required by SRS
 
   useEffect(() => {
-    AsyncStorage.getItem(LANGUAGE_STORAGE_KEY).then(saved => {
-      if (saved === 'en' || saved === 'rw') {
-        setLanguageState(saved);
-      }
-    });
+    AsyncStorage.getItem(LANGUAGE_STORAGE_KEY)
+      .then(saved => {
+        if (saved === 'en' || saved === 'rw') {
+          setLanguageState(saved);
+        }
+      })
+      .catch(() => {
+        // Fallback safely to default 'rw'
+      });
   }, []);
 
   const setLanguage = async (newLang: Language) => {
     setLanguageState(newLang);
-    await AsyncStorage.setItem(LANGUAGE_STORAGE_KEY, newLang);
+    try {
+      await AsyncStorage.setItem(LANGUAGE_STORAGE_KEY, newLang);
+    } catch {
+      // Ignored
+    }
   };
 
   const t = language === 'rw' ? rw : en;
