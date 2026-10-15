@@ -6,39 +6,80 @@ import {
   ScrollView,
   TouchableOpacity,
   Alert,
+  Modal,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { colors, radii } from '../../theme/tokens';
+import { colors, radii, shadows, typography, spacing } from '../../theme/tokens';
 import { useTranslation, Language } from '../../i18n';
 import { Card } from '../../components/ui/Card';
 import { Button } from '../../components/ui/Button';
 import { StatusBadge } from '../../components/ui/StatusBadge';
+import { FormField } from '../../components/forms/FormField';
 import { authService, mockState } from '../../services/mock/mockServices';
+import { localStorage } from '../../data/local/storage';
 import { User } from '../../domain/models';
 
 interface ProfileScreenProps {
   user: User;
   onLogout: () => void;
   onResetComplete: () => void;
+  onUserUpdated?: (updatedUser: User) => void;
 }
 
 export const ProfileScreen: React.FC<ProfileScreenProps> = ({
   user,
   onLogout,
   onResetComplete,
+  onUserUpdated,
 }) => {
   const { t, language, setLanguage } = useTranslation();
   const org = authService.getUserOrganization(user);
   const [resetting, setResetting] = useState(false);
 
+  // Edit Profile Modal state
+  const [isEditing, setIsEditing] = useState(false);
+  const [editName, setEditName] = useState(user.fullName);
+  const [editPhone, setEditPhone] = useState(user.phone);
+  const [editError, setEditError] = useState('');
+  const [savingEdit, setSavingEdit] = useState(false);
+
   const handleLanguageToggle = async (newLang: Language) => {
     await setLanguage(newLang);
+  };
+
+  const handleSaveProfile = async () => {
+    if (!editName.trim()) {
+      setEditError('Full name cannot be empty');
+      return;
+    }
+    if (!editPhone.trim()) {
+      setEditError('Phone number cannot be empty');
+      return;
+    }
+
+    setSavingEdit(true);
+    const updatedUser: User = {
+      ...user,
+      fullName: editName.trim(),
+      phone: editPhone.trim(),
+    };
+
+    await localStorage.setSessionUser(updatedUser);
+    setSavingEdit(false);
+    setIsEditing(false);
+    setEditError('');
+
+    if (onUserUpdated) {
+      onUserUpdated(updatedUser);
+    }
+
+    Alert.alert(t.common.appName, t.profile.profileUpdated);
   };
 
   const handleResetData = () => {
     Alert.alert(
       t.common.resetDemoData,
-      'This will reset all lots, orders, disputes, and offline queues back to the deterministic initial seed state. Continue?',
+      t.profile.demoResetDesc,
       [
         { text: t.common.cancel, style: 'cancel' },
         {
@@ -48,8 +89,8 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
             setResetting(true);
             await mockState.resetAll();
             setResetting(false);
-            Alert.alert('Demo Reset', 'All application demo data has been reset to baseline.', [
-              { text: 'OK', onPress: onResetComplete },
+            Alert.alert(t.common.appName, t.profile.resetSuccess, [
+              { text: t.common.done, onPress: onResetComplete },
             ]);
           },
         },
@@ -58,7 +99,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
   };
 
   const handleLogout = () => {
-    Alert.alert(t.common.logout, 'Are you sure you want to log out of Cargo?', [
+    Alert.alert(t.common.logout, `${t.common.logout}?`, [
       { text: t.common.cancel, style: 'cancel' },
       {
         text: t.common.logout,
@@ -72,189 +113,429 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
   };
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.scrollContent}>
-      {/* User Header */}
-      <View style={styles.userCard}>
-        <View style={styles.avatar}>
-          <Text style={styles.avatarText}>{user.fullName.charAt(0)}</Text>
-        </View>
-        <Text style={styles.userName}>{user.fullName}</Text>
-        <Text style={styles.userRole}>
-          {(t.roles as any)[user.role] || user.role}
-        </Text>
-        <Text style={styles.userContact}>{user.phone} · {user.email}</Text>
-      </View>
-
-      {/* Organization Details */}
-      {org && (
-        <Card>
-          <View style={styles.cardHeader}>
-            <Text style={styles.cardTitle}>{t.profile.organization}</Text>
-            <StatusBadge status={org.verificationStatus} />
+    <View style={styles.container}>
+      <ScrollView contentContainerStyle={styles.scrollContent}>
+        {/* Executive Header Card */}
+        <View style={styles.headerCard}>
+          <View style={styles.headerTop}>
+            <View style={styles.avatar}>
+              <Text style={styles.avatarText}>{user.fullName.charAt(0).toUpperCase()}</Text>
+            </View>
+            <View style={styles.headerMeta}>
+              <Text style={styles.userName}>{user.fullName}</Text>
+              <Text style={styles.userRole}>
+                {(t.roles as any)[user.role] || user.role}
+              </Text>
+              <Text style={styles.userPhone}>{user.phone}</Text>
+            </View>
           </View>
-          <Text style={styles.orgName}>{org.name}</Text>
-          <Text style={styles.orgDetails}>
-            Reg No: {org.registrationNumber} {org.tin ? `· TIN: ${org.tin}` : ''}
-          </Text>
-          <Text style={styles.orgDetails}>
-            Location: {org.district}, {org.sector}
-          </Text>
-        </Card>
-      )}
 
-      {/* Language Switcher */}
-      <Card>
-        <Text style={styles.cardTitle}>{t.profile.language}</Text>
-        <View style={styles.langRow}>
-          <TouchableOpacity
-            style={[styles.langBtn, language === 'rw' && styles.langBtnActive]}
-            onPress={() => handleLanguageToggle('rw')}
-          >
-            <Text style={[styles.langText, language === 'rw' && styles.langTextActive]}>
-              🇷🇼 Ikinyarwanda
-            </Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[styles.langBtn, language === 'en' && styles.langBtnActive]}
-            onPress={() => handleLanguageToggle('en')}
-          >
-            <Text style={[styles.langText, language === 'en' && styles.langTextActive]}>
-              🇬🇧 English
-            </Text>
-          </TouchableOpacity>
+          <View style={styles.headerActionRow}>
+            <StatusBadge status={org?.verificationStatus || 'VERIFIED'} size="small" />
+            <Button
+              title={t.profile.editProfile}
+              onPress={() => {
+                setEditName(user.fullName);
+                setEditPhone(user.phone);
+                setIsEditing(true);
+              }}
+              variant="outline"
+              size="small"
+              icon={<Ionicons name="create-outline" size={15} color={colors.primary} />}
+            />
+          </View>
         </View>
-      </Card>
 
-      {/* Operations & Reset */}
-      <Card>
-        <Text style={styles.cardTitle}>Demo Environment Actions</Text>
-        <Text style={styles.resetExplanation}>
-          Use this action to wipe any transient test lots or orders and restore the original seed data.
-        </Text>
-        <Button
-          title={resetting ? 'Resetting...' : t.common.resetDemoData}
-          onPress={handleResetData}
-          variant="secondary"
-          loading={resetting}
-          style={{ marginTop: 8 }}
-        />
-      </Card>
+        {/* Organization / Cooperative Information */}
+        {org && (
+          <Card style={styles.sectionCard}>
+            <View style={styles.cardHeaderRow}>
+              <View style={styles.cardHeaderLeft}>
+                <Ionicons name="business-outline" size={18} color={colors.primary} />
+                <Text style={styles.cardSectionTitle}>{t.profile.organization}</Text>
+              </View>
+              <StatusBadge status={org.verificationStatus} size="small" />
+            </View>
 
-      {/* Logout */}
-      <Button
-        title={t.common.logout}
-        onPress={handleLogout}
-        variant="danger"
-        style={styles.logoutBtn}
-      />
-    </ScrollView>
+            <Text style={styles.orgName}>{org.name}</Text>
+
+            <View style={styles.orgMetaGrid}>
+              <View style={styles.orgMetaItem}>
+                <Text style={styles.metaLabel}>Reg No</Text>
+                <Text style={styles.metaVal}>{org.registrationNumber}</Text>
+              </View>
+              {org.tin && (
+                <View style={styles.orgMetaItem}>
+                  <Text style={styles.metaLabel}>TIN</Text>
+                  <Text style={styles.metaVal}>{org.tin}</Text>
+                </View>
+              )}
+              <View style={styles.orgMetaItem}>
+                <Text style={styles.metaLabel}>Location</Text>
+                <Text style={styles.metaVal}>
+                  {org.district}, {org.sector}
+                </Text>
+              </View>
+            </View>
+          </Card>
+        )}
+
+        {/* Language Selection Card */}
+        <Card style={styles.sectionCard}>
+          <View style={styles.cardHeaderRow}>
+            <View style={styles.cardHeaderLeft}>
+              <Ionicons name="globe-outline" size={18} color={colors.primary} />
+              <Text style={styles.cardSectionTitle}>{t.profile.language}</Text>
+            </View>
+          </View>
+
+          <View style={styles.langGrid}>
+            <TouchableOpacity
+              style={[styles.langBtn, language === 'rw' && styles.langBtnActive]}
+              onPress={() => handleLanguageToggle('rw')}
+              activeOpacity={0.8}
+              accessibilityRole="button"
+            >
+              <Text style={styles.flagText}>🇷🇼</Text>
+              <Text style={[styles.langBtnText, language === 'rw' && styles.langBtnTextActive]}>
+                Ikinyarwanda
+              </Text>
+              {language === 'rw' && (
+                <Ionicons name="checkmark-circle" size={16} color={colors.primary} />
+              )}
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.langBtn, language === 'en' && styles.langBtnActive]}
+              onPress={() => handleLanguageToggle('en')}
+              activeOpacity={0.8}
+              accessibilityRole="button"
+            >
+              <Text style={styles.flagText}>🇬🇧</Text>
+              <Text style={[styles.langBtnText, language === 'en' && styles.langBtnTextActive]}>
+                English
+              </Text>
+              {language === 'en' && (
+                <Ionicons name="checkmark-circle" size={16} color={colors.primary} />
+              )}
+            </TouchableOpacity>
+          </View>
+        </Card>
+
+        {/* Support & Operations Hotline */}
+        <Card style={styles.sectionCard}>
+          <View style={styles.cardHeaderRow}>
+            <View style={styles.cardHeaderLeft}>
+              <Ionicons name="headset-outline" size={18} color={colors.primary} />
+              <Text style={styles.cardSectionTitle}>{t.profile.help}</Text>
+            </View>
+          </View>
+
+          <Text style={styles.supportTitle}>{t.profile.supportHotline}</Text>
+          <Text style={styles.supportDetail}>{t.profile.kigaliOffice}</Text>
+          <Text style={styles.supportDetailHighlight}>{t.profile.supportPhone}</Text>
+        </Card>
+
+        {/* Demo Actions & Reset */}
+        <Card style={styles.sectionCard}>
+          <View style={styles.cardHeaderRow}>
+            <View style={styles.cardHeaderLeft}>
+              <Ionicons name="refresh-circle-outline" size={18} color={colors.warningDark} />
+              <Text style={styles.cardSectionTitle}>{t.profile.demoActions}</Text>
+            </View>
+          </View>
+
+          <Text style={styles.resetExplanation}>{t.profile.demoResetDesc}</Text>
+
+          <Button
+            title={resetting ? t.common.loading : t.common.resetDemoData}
+            onPress={handleResetData}
+            variant="secondary"
+            loading={resetting}
+            icon={<Ionicons name="reload" size={16} color={colors.neutralDark} />}
+            style={styles.resetButton}
+          />
+        </Card>
+
+        {/* Logout Button */}
+        <View style={styles.logoutWrapper}>
+          <Button
+            title={t.common.logout}
+            onPress={handleLogout}
+            variant="danger"
+            size="large"
+            icon={<Ionicons name="log-out-outline" size={20} color="#FFFFFF" />}
+            fullWidth
+          />
+          <Text style={styles.appVersionText}>{t.profile.appVersion}</Text>
+        </View>
+      </ScrollView>
+
+      {/* Edit Profile Modal */}
+      <Modal
+        visible={isEditing}
+        animationType="slide"
+        transparent
+        onRequestClose={() => setIsEditing(false)}
+      >
+        <View style={styles.modalBackdrop}>
+          <View style={styles.modalCard}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>{t.profile.editProfile}</Text>
+              <TouchableOpacity onPress={() => setIsEditing(false)}>
+                <Ionicons name="close" size={22} color={colors.neutralDark} />
+              </TouchableOpacity>
+            </View>
+
+            <FormField
+              label={t.profile.fullName}
+              value={editName}
+              onChangeText={setEditName}
+              placeholder="e.g. Jean Baptiste"
+            />
+
+            <FormField
+              label={t.profile.phoneNumber}
+              value={editPhone}
+              onChangeText={setEditPhone}
+              placeholder="078..."
+              keyboardType="phone-pad"
+              error={editError}
+            />
+
+            <View style={styles.modalActionRow}>
+              <Button
+                title={t.common.cancel}
+                onPress={() => setIsEditing(false)}
+                variant="secondary"
+                style={{ flex: 1 }}
+              />
+              <Button
+                title={savingEdit ? t.common.loading : t.common.save}
+                onPress={handleSaveProfile}
+                loading={savingEdit}
+                style={{ flex: 1 }}
+              />
+            </View>
+          </View>
+        </View>
+      </Modal>
+    </View>
   );
 };
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F5F4F6',
+    backgroundColor: colors.background,
   },
   scrollContent: {
-    padding: 16,
-    paddingBottom: 40,
+    padding: spacing.md,
+    paddingBottom: spacing.xxxl + 20,
   },
-  userCard: {
-    backgroundColor: colors.surface,
-    borderRadius: radii.md,
-    padding: 24,
-    alignItems: 'center',
-    marginBottom: 16,
+  headerCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: radii.lg,
+    padding: spacing.lg,
+    marginBottom: spacing.md,
     borderWidth: 1,
     borderColor: colors.border,
+    ...shadows.subtle,
+  },
+  headerTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: spacing.md,
   },
   avatar: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    backgroundColor: colors.primary,
+    width: 54,
+    height: 54,
+    borderRadius: 27,
+    backgroundColor: colors.primaryDark,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 12,
+    marginRight: spacing.md,
   },
   avatarText: {
-    fontSize: 24,
-    fontWeight: '700',
-    color: '#FFF',
+    fontSize: 22,
+    fontWeight: '800',
+    color: '#FFFFFF',
+  },
+  headerMeta: {
+    flex: 1,
   },
   userName: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: colors.neutralDark,
+    ...typography.h2,
+    fontSize: 18,
+    color: colors.neutralHeadings,
   },
   userRole: {
-    fontSize: 14,
+    ...typography.caption,
+    fontSize: 12,
     color: colors.primary,
-    fontWeight: '600',
+    fontWeight: '700',
     marginTop: 2,
   },
-  userContact: {
-    fontSize: 12,
+  userPhone: {
+    ...typography.caption,
     color: colors.neutralGray,
-    marginTop: 6,
+    marginTop: 2,
   },
-  cardHeader: {
+  headerActionRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 8,
+    paddingTop: spacing.sm,
+    borderTopWidth: 1,
+    borderTopColor: colors.borderLight,
   },
-  cardTitle: {
-    fontSize: 15,
+  sectionCard: {
+    marginBottom: spacing.md,
+  },
+  cardHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: spacing.sm,
+  },
+  cardHeaderLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+  },
+  cardSectionTitle: {
+    ...typography.caption,
+    fontSize: 12,
     fontWeight: '700',
-    color: colors.neutralDark,
+    color: colors.neutralHeadings,
+    textTransform: 'uppercase',
   },
   orgName: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: colors.neutralDark,
+    ...typography.h3,
+    fontSize: 15,
+    color: colors.neutralHeadings,
+    marginBottom: spacing.sm,
   },
-  orgDetails: {
-    fontSize: 13,
-    color: colors.neutralGray,
-    marginTop: 4,
-  },
-  langRow: {
+  orgMetaGrid: {
     flexDirection: 'row',
-    gap: 10,
-    marginTop: 10,
+    flexWrap: 'wrap',
+    gap: spacing.sm,
+    backgroundColor: colors.surfaceSubtle,
+    borderRadius: radii.md,
+    padding: spacing.sm + 2,
+  },
+  orgMetaItem: {
+    width: '46%',
+  },
+  metaLabel: {
+    ...typography.caption,
+    fontSize: 10,
+    color: colors.neutralGray,
+  },
+  metaVal: {
+    ...typography.caption,
+    fontSize: 12,
+    fontWeight: '700',
+    color: colors.neutralDark,
+    marginTop: 1,
+  },
+  langGrid: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+    marginTop: spacing.xs,
   },
   langBtn: {
     flex: 1,
-    paddingVertical: 12,
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.sm,
     borderRadius: radii.md,
     borderWidth: 1.5,
     borderColor: colors.border,
-    backgroundColor: '#FFF',
+    backgroundColor: '#FFFFFF',
+    gap: spacing.xs,
   },
   langBtnActive: {
     borderColor: colors.primary,
-    backgroundColor: '#DCFCE7',
+    backgroundColor: colors.surfaceHighlighted,
   },
-  langText: {
-    fontSize: 14,
+  flagText: {
+    fontSize: 18,
+  },
+  langBtnText: {
+    ...typography.caption,
+    fontSize: 13,
     fontWeight: '600',
     color: colors.neutralDark,
   },
-  langTextActive: {
+  langBtnTextActive: {
+    color: colors.primary,
+    fontWeight: '700',
+  },
+  supportTitle: {
+    ...typography.bodyMedium,
+    fontSize: 14,
+    fontWeight: '700',
+    color: colors.neutralHeadings,
+    marginBottom: 2,
+  },
+  supportDetail: {
+    ...typography.caption,
+    color: colors.neutralGray,
+    marginBottom: 4,
+  },
+  supportDetailHighlight: {
+    ...typography.caption,
+    fontWeight: '700',
     color: colors.primary,
   },
   resetExplanation: {
-    fontSize: 12,
+    ...typography.caption,
     color: colors.neutralGray,
-    marginTop: 4,
     lineHeight: 16,
+    marginBottom: spacing.sm,
   },
-  logoutBtn: {
-    marginTop: 16,
+  resetButton: {
+    marginTop: spacing.xs,
+  },
+  logoutWrapper: {
+    marginTop: spacing.md,
+    marginBottom: spacing.xxl,
+  },
+  appVersionText: {
+    ...typography.caption,
+    textAlign: 'center',
+    color: colors.neutralLight,
+    marginTop: spacing.md,
+  },
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(15, 23, 42, 0.5)',
+    justifyContent: 'center',
+    padding: spacing.lg,
+  },
+  modalCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: radii.lg,
+    padding: spacing.lg,
+    ...shadows.lg,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: spacing.md,
+  },
+  modalTitle: {
+    ...typography.h3,
+    fontSize: 16,
+    color: colors.neutralHeadings,
+  },
+  modalActionRow: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+    marginTop: spacing.md,
   },
 });

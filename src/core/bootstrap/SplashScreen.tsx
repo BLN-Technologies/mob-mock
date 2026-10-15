@@ -1,7 +1,7 @@
 import React, { useEffect } from 'react';
 import { View, Text, StyleSheet, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { colors } from '../../theme/tokens';
+import { colors, radii, typography } from '../../theme/tokens';
 import { useTranslation } from '../../i18n';
 import { localStorage } from '../../data/local/storage';
 import { User } from '../../domain/models';
@@ -53,7 +53,7 @@ export const SplashScreen: React.FC<SplashScreenProps> = ({ onBootstrapComplete 
       <Text style={styles.brandTitle}>{t.common.appName}</Text>
       <Text style={styles.brandTagline}>{t.common.tagline}</Text>
 
-      <ActivityIndicator size="small" color="#FFFFFF" style={styles.loader} />
+      <ActivityIndicator size="small" color="#06EFAC" style={styles.loader} />
 
       <Text style={styles.versionText}>Cargo V1 Mobile · Rwanda</Text>
     </View>
@@ -63,7 +63,7 @@ export const SplashScreen: React.FC<SplashScreenProps> = ({ onBootstrapComplete 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#0FAA38',
+    backgroundColor: colors.primaryDark,
     alignItems: 'center',
     justifyContent: 'center',
     padding: 24,
@@ -72,15 +72,15 @@ const styles = StyleSheet.create({
     width: 88,
     height: 88,
     borderRadius: 44,
-    backgroundColor: '#0B3B24',
+    backgroundColor: colors.primary,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 16,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.15,
+    shadowOpacity: 0.2,
     shadowRadius: 10,
-    elevation: 6,
+    elevation: 8,
   },
   brandTitle: {
     fontSize: 40,
@@ -89,7 +89,7 @@ const styles = StyleSheet.create({
     letterSpacing: 1,
   },
   brandTagline: {
-    fontSize: 16,
+    fontSize: 15,
     color: '#DCFCE7',
     marginTop: 6,
     fontWeight: '500',

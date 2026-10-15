@@ -9,10 +9,11 @@ import {
   Image,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { colors, radii, shadows } from '../../theme/tokens';
+import { colors, radii, shadows, typography, spacing } from '../../theme/tokens';
 import { useTranslation } from '../../i18n';
 import { Card } from '../../components/ui/Card';
 import { StatusBadge } from '../../components/ui/StatusBadge';
+import { CropBadge } from '../../components/ui/CropBadge';
 import { Button } from '../../components/ui/Button';
 import { EmptyState } from '../../components/feedback/EmptyState';
 import { lotService } from '../../services/mock/mockServices';
@@ -56,19 +57,23 @@ export const BuyerCatalogueScreen: React.FC<BuyerCatalogueScreenProps> = ({
     <View style={styles.container}>
       <ScrollView
         contentContainerStyle={styles.scrollContent}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[colors.primary]} />}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[colors.primary]} />
+        }
       >
         {/* Header Action */}
         <View style={styles.headerRow}>
-          <View>
+          <View style={styles.headerTextWrap}>
             <Text style={styles.title}>{t.buyer.catalogue}</Text>
-            <Text style={styles.subtitle}>Inspected, field-graded, and Cargo-verified inventory only.</Text>
+            <Text style={styles.subtitle}>
+              Inspected, field-graded, and Cargo-verified inventory (BR-02 & BR-05).
+            </Text>
           </View>
           <Button
-            title="Post Request"
+            title={t.buyer.postRequest}
             onPress={onNavigateToCreateRequest}
-            icon={<Ionicons name="add" size={18} color="#FFF" />}
-            style={styles.requestBtn}
+            icon={<Ionicons name="add" size={16} color="#FFF" />}
+            size="small"
           />
         </View>
 
@@ -79,23 +84,29 @@ export const BuyerCatalogueScreen: React.FC<BuyerCatalogueScreenProps> = ({
               key={c}
               style={[styles.chip, selectedCrop === c && styles.chipActive]}
               onPress={() => setSelectedCrop(c)}
+              activeOpacity={0.8}
             >
               <Text style={[styles.chipText, selectedCrop === c && styles.chipTextActive]}>
-                {c}
+                {c === 'All' ? t.common.all : c}
               </Text>
             </TouchableOpacity>
           ))}
         </ScrollView>
 
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={[styles.chipScroll, { marginTop: 6 }]}>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          style={[styles.chipScroll, { marginTop: 4 }]}
+        >
           {gradeChips.map(g => (
             <TouchableOpacity
               key={g}
               style={[styles.chip, selectedGrade === g && styles.chipActive]}
               onPress={() => setSelectedGrade(g)}
+              activeOpacity={0.8}
             >
               <Text style={[styles.chipText, selectedGrade === g && styles.chipTextActive]}>
-                {g === 'All' ? 'All Grades' : g === 'GRADE_A' ? 'Grade A (Premium)' : 'Grade B'}
+                {g === 'All' ? 'All Quality Grades' : g === 'GRADE_A' ? 'Grade A (Premium)' : 'Grade B'}
               </Text>
             </TouchableOpacity>
           ))}
@@ -107,48 +118,59 @@ export const BuyerCatalogueScreen: React.FC<BuyerCatalogueScreenProps> = ({
             icon="search-outline"
             title="No matching verified produce"
             description="No current stock matches your selected filters. You can post a custom institutional sourcing request."
-            actionTitle="Post Sourcing Request"
+            actionTitle={t.buyer.postRequest}
             onActionPress={onNavigateToCreateRequest}
           />
         ) : (
           lots.map(lot => (
-            <TouchableOpacity
+            <Card
               key={lot.id}
-              activeOpacity={0.8}
               onPress={() => onSelectLot(lot)}
+              style={styles.lotCard}
+              padding="none"
             >
-              <Card style={styles.lotCard}>
-                <Image
-                  source={{ uri: lot.photos[0] || 'https://images.unsplash.com/photo-1551754655-cd27e38d2076?w=600' }}
-                  style={styles.lotImage}
-                />
-                <View style={styles.lotCardBody}>
-                  <View style={styles.cardHeaderRow}>
-                    <View>
-                      <Text style={styles.cropTitle}>{lot.cropName}</Text>
-                      <Text style={styles.lotCode}>{lot.lotCode} · {lot.variety || 'Standard'}</Text>
-                    </View>
-                    <StatusBadge status={lot.grade} />
-                  </View>
-
-                  <View style={styles.metricsRow}>
-                    <Text style={styles.quantityText}>
-                      📦 Available: {formatQuantity(lot.availableQuantityKg)}
-                    </Text>
-                    <Text style={styles.districtText}>
-                      📍 {lot.district}
+              <Image
+                source={{
+                  uri: lot.photos[0] || 'https://images.unsplash.com/photo-1551754655-cd27e38d2076?w=600',
+                }}
+                style={styles.lotImage}
+              />
+              <View style={styles.lotCardBody}>
+                <View style={styles.cardHeaderRow}>
+                  <CropBadge cropName={lot.cropName} size="small" />
+                  <View style={styles.cropInfoWrap}>
+                    <Text style={styles.cropTitle}>{lot.cropName}</Text>
+                    <Text style={styles.lotCode}>
+                      {lot.lotCode} · {lot.variety || 'Standard Bulk'}
                     </Text>
                   </View>
+                  <StatusBadge status={lot.grade} size="small" />
+                </View>
 
-                  <View style={styles.cardFooter}>
-                    <Text style={styles.priceText}>{formatRwf(lot.pricePerKgRwf)} / kg</Text>
-                    <View style={styles.detailsBadge}>
-                      <Text style={styles.detailsBadgeText}>View Details →</Text>
-                    </View>
+                <View style={styles.metricsRow}>
+                  <View style={styles.metricItem}>
+                    <Text style={styles.metricLabel}>{t.supplier.remainingStock}</Text>
+                    <Text style={styles.metricValHighlight}>
+                      {formatQuantity(lot.availableQuantityKg)}
+                    </Text>
+                  </View>
+                  <View style={styles.metricItem}>
+                    <Text style={styles.metricLabel}>Location</Text>
+                    <Text style={styles.metricVal}>{lot.district}</Text>
                   </View>
                 </View>
-              </Card>
-            </TouchableOpacity>
+
+                <View style={styles.cardFooter}>
+                  <View>
+                    <Text style={styles.priceLabel}>Wholesale Unit Price</Text>
+                    <Text style={styles.priceText}>{formatRwf(lot.pricePerKgRwf)} / kg</Text>
+                  </View>
+                  <View style={styles.detailsBadge}>
+                    <Text style={styles.detailsBadgeText}>{t.common.viewDetails} →</Text>
+                  </View>
+                </View>
+              </View>
+            </Card>
           ))
         )}
       </ScrollView>
@@ -159,60 +181,60 @@ export const BuyerCatalogueScreen: React.FC<BuyerCatalogueScreenProps> = ({
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F5F4F6',
+    backgroundColor: colors.background,
   },
   scrollContent: {
-    padding: 16,
-    paddingBottom: 40,
+    padding: spacing.md,
+    paddingBottom: spacing.xxxl + 20,
   },
   headerRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 12,
+    marginBottom: spacing.md,
+  },
+  headerTextWrap: {
+    flex: 1,
+    marginRight: spacing.sm,
   },
   title: {
-    fontSize: 22,
-    fontWeight: '700',
-    color: colors.neutralDark,
+    ...typography.h2,
+    fontSize: 18,
+    color: colors.neutralHeadings,
   },
   subtitle: {
-    fontSize: 12,
+    ...typography.caption,
     color: colors.neutralGray,
     marginTop: 2,
-    maxWidth: 220,
-  },
-  requestBtn: {
-    minHeight: 40,
-    paddingHorizontal: 12,
   },
   chipScroll: {
-    marginBottom: 8,
+    marginBottom: spacing.xs,
   },
   chip: {
-    backgroundColor: colors.surface,
-    paddingVertical: 6,
-    paddingHorizontal: 14,
+    backgroundColor: '#FFFFFF',
+    paddingVertical: 5,
+    paddingHorizontal: 12,
     borderRadius: radii.full,
-    borderWidth: 1,
+    borderWidth: 1.5,
     borderColor: colors.border,
-    marginRight: 8,
+    marginRight: spacing.xs + 2,
   },
   chipActive: {
     backgroundColor: colors.primary,
     borderColor: colors.primary,
   },
   chipText: {
-    fontSize: 13,
+    ...typography.caption,
+    fontSize: 12,
     color: colors.neutralDark,
-    fontWeight: '500',
-  },
-  chipTextActive: {
-    color: '#FFF',
     fontWeight: '600',
   },
+  chipTextActive: {
+    color: '#FFFFFF',
+    fontWeight: '700',
+  },
   lotCard: {
-    padding: 0,
+    marginBottom: spacing.md,
     overflow: 'hidden',
   },
   lotImage: {
@@ -221,60 +243,88 @@ const styles = StyleSheet.create({
     backgroundColor: '#E2E8F0',
   },
   lotCardBody: {
-    padding: 14,
+    padding: spacing.md,
   },
   cardHeaderRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginBottom: 8,
+    alignItems: 'center',
+    marginBottom: spacing.sm,
+  },
+  cropInfoWrap: {
+    flex: 1,
+    marginLeft: spacing.sm,
+    marginRight: spacing.xs,
   },
   cropTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: colors.neutralDark,
+    ...typography.h3,
+    fontSize: 15,
+    color: colors.neutralHeadings,
   },
   lotCode: {
-    fontSize: 12,
+    ...typography.caption,
     color: colors.neutralGray,
-    marginTop: 2,
   },
   metricsRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginBottom: 10,
+    backgroundColor: colors.surfaceSubtle,
+    padding: spacing.sm,
+    borderRadius: radii.sm,
+    marginBottom: spacing.sm,
   },
-  quantityText: {
-    fontSize: 13,
-    color: colors.neutralDark,
-    fontWeight: '500',
+  metricItem: {
+    flex: 1,
   },
-  districtText: {
-    fontSize: 13,
+  metricLabel: {
+    ...typography.caption,
+    fontSize: 10,
     color: colors.neutralGray,
+  },
+  metricVal: {
+    ...typography.bodyMedium,
+    fontSize: 12,
+    fontWeight: '700',
+    color: colors.neutralHeadings,
+    marginTop: 1,
+  },
+  metricValHighlight: {
+    ...typography.bodyMedium,
+    fontSize: 12,
+    fontWeight: '700',
+    color: colors.primary,
+    marginTop: 1,
   },
   cardFooter: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingTop: 10,
+    alignItems: 'flex-end',
+    paddingTop: spacing.xs,
     borderTopWidth: 1,
-    borderTopColor: colors.border,
+    borderTopColor: colors.borderLight,
+  },
+  priceLabel: {
+    ...typography.caption,
+    fontSize: 10,
+    color: colors.neutralGray,
   },
   priceText: {
-    fontSize: 16,
-    fontWeight: '700',
+    ...typography.bodyMedium,
+    fontSize: 15,
+    fontWeight: '800',
     color: colors.primary,
   },
   detailsBadge: {
-    backgroundColor: '#F0FDF4',
+    backgroundColor: colors.surfaceHighlighted,
     paddingHorizontal: 10,
     paddingVertical: 5,
     borderRadius: radii.sm,
+    borderWidth: 1,
+    borderColor: colors.successBorder,
   },
   detailsBadgeText: {
-    fontSize: 12,
-    fontWeight: '600',
+    ...typography.caption,
+    fontSize: 11,
+    fontWeight: '700',
     color: colors.primary,
   },
 });

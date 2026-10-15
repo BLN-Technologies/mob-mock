@@ -1,34 +1,68 @@
 import React from 'react';
-import { View, Text, TextInput, StyleSheet, TextInputProps } from 'react-native';
-import { colors, radii } from '../../theme/tokens';
+import {
+  View,
+  Text,
+  TextInput,
+  StyleSheet,
+  TextInputProps,
+  ViewStyle,
+} from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import { colors, radii, typography, spacing } from '../../theme/tokens';
 
 interface FormFieldProps extends TextInputProps {
   label: string;
   error?: string;
   helper?: string;
+  prefix?: string;
+  suffix?: string;
+  containerStyle?: ViewStyle;
 }
 
 export const FormField: React.FC<FormFieldProps> = ({
   label,
   error,
   helper,
+  prefix,
+  suffix,
+  containerStyle,
   style,
   ...props
 }) => {
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, containerStyle]}>
       <Text style={styles.label}>{label}</Text>
-      <TextInput
+      
+      <View
         style={[
-          styles.input,
-          error ? styles.inputError : undefined,
-          style,
+          styles.inputWrapper,
+          error ? styles.inputWrapperError : undefined,
         ]}
-        placeholderTextColor="#94A3B8"
-        {...props}
-      />
+      >
+        {prefix && (
+          <View style={styles.adornment}>
+            <Text style={styles.adornmentText}>{prefix}</Text>
+          </View>
+        )}
+
+        <TextInput
+          style={[styles.input, style]}
+          placeholderTextColor="#94A3B8"
+          {...props}
+        />
+
+        {suffix && (
+          <View style={styles.adornment}>
+            <Text style={styles.adornmentText}>{suffix}</Text>
+          </View>
+        )}
+      </View>
+
       {error ? (
-        <Text style={styles.errorText}>{error}</Text>
+        <View style={styles.errorRow}>
+          <Ionicons name="alert-circle" size={14} color={colors.danger} />
+          <Text style={styles.errorText}>{error}</Text>
+        </View>
       ) : helper ? (
         <Text style={styles.helperText}>{helper}</Text>
       ) : null}
@@ -38,36 +72,65 @@ export const FormField: React.FC<FormFieldProps> = ({
 
 const styles = StyleSheet.create({
   container: {
-    marginBottom: 16,
+    marginBottom: spacing.md,
   },
   label: {
-    fontSize: 14,
+    ...typography.bodyMedium,
+    fontSize: 13,
     fontWeight: '600',
-    color: colors.neutralDark,
-    marginBottom: 6,
+    color: colors.neutralHeadings,
+    marginBottom: spacing.xs,
   },
-  input: {
+  inputWrapper: {
     minHeight: 48,
     borderWidth: 1.5,
     borderColor: colors.border,
     borderRadius: radii.md,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    fontSize: 15,
-    color: colors.neutralDark,
     backgroundColor: colors.surface,
+    flexDirection: 'row',
+    alignItems: 'center',
+    overflow: 'hidden',
   },
-  inputError: {
+  inputWrapperError: {
     borderColor: colors.danger,
+    backgroundColor: '#FEF2F2',
+  },
+  input: {
+    flex: 1,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    fontSize: 14,
+    color: colors.neutralDark,
+  },
+  adornment: {
+    paddingHorizontal: spacing.md,
+    backgroundColor: colors.surfaceSubtle,
+    height: '100%',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderRightWidth: 1,
+    borderRightColor: colors.borderLight,
+  },
+  adornmentText: {
+    ...typography.caption,
+    fontSize: 12,
+    fontWeight: '700',
+    color: colors.neutralGray,
+  },
+  errorRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: spacing.xs,
+    gap: 4,
   },
   errorText: {
-    fontSize: 12,
+    ...typography.caption,
     color: colors.danger,
-    marginTop: 4,
+    fontSize: 11,
   },
   helperText: {
-    fontSize: 12,
+    ...typography.caption,
     color: colors.neutralGray,
-    marginTop: 4,
+    marginTop: spacing.xs,
   },
 });

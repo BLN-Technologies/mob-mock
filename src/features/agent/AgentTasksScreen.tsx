@@ -8,13 +8,15 @@ import {
   TouchableOpacity,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { colors, radii } from '../../theme/tokens';
+import { colors, radii, typography, spacing } from '../../theme/tokens';
 import { useTranslation } from '../../i18n';
 import { Card } from '../../components/ui/Card';
 import { StatusBadge } from '../../components/ui/StatusBadge';
+import { CropBadge } from '../../components/ui/CropBadge';
 import { OfflineBanner } from '../../components/ui/OfflineBanner';
 import { EmptyState } from '../../components/feedback/EmptyState';
 import { gradingService } from '../../services/mock/mockServices';
+import { formatQuantity } from '../../domain/calculations/lotCalculations';
 import { Lot, Organization } from '../../domain/models';
 
 interface AgentTasksScreenProps {
@@ -47,10 +49,16 @@ export const AgentTasksScreen: React.FC<AgentTasksScreenProps> = ({ onSelectTask
 
       <ScrollView
         contentContainerStyle={styles.scrollContent}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[colors.primary]} />}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[colors.primary]} />
+        }
       >
-        <Text style={styles.pageTitle}>{t.agent.tasks}</Text>
-        <Text style={styles.pageSubtitle}>Assigned harvest lots ready for quality grading and verification.</Text>
+        <View style={styles.headerBox}>
+          <Text style={styles.pageTitle}>{t.agent.tasks}</Text>
+          <Text style={styles.pageSubtitle}>
+            Assigned harvest lots ready for quality grading and verification.
+          </Text>
+        </View>
 
         {tasks.length === 0 ? (
           <EmptyState
@@ -60,42 +68,43 @@ export const AgentTasksScreen: React.FC<AgentTasksScreenProps> = ({ onSelectTask
           />
         ) : (
           tasks.map(({ lot, org }) => (
-            <TouchableOpacity
+            <Card
               key={lot.id}
-              activeOpacity={0.8}
               onPress={() => onSelectTask(lot, org)}
+              style={styles.taskCard}
             >
-              <Card>
-                <View style={styles.cardHeader}>
-                  <View>
-                    <Text style={styles.cropTitle}>{lot.cropName}</Text>
-                    <Text style={styles.lotCode}>{lot.lotCode}</Text>
-                  </View>
-                  <StatusBadge status={lot.status} />
-                </View>
-
-                <View style={styles.orgRow}>
-                  <Ionicons name="business-outline" size={16} color={colors.neutralGray} />
-                  <Text style={styles.orgName}>{org?.name || 'Local Farm Group'}</Text>
-                </View>
-
-                <View style={styles.locationRow}>
-                  <Ionicons name="location-outline" size={16} color={colors.primary} />
-                  <Text style={styles.locationText}>
-                    {lot.pickupDistrict}, {lot.pickupSector} ({lot.pickupLocationDetails})
+              <View style={styles.cardHeader}>
+                <CropBadge cropName={lot.cropName} size="small" />
+                <View style={styles.cardHeaderMeta}>
+                  <Text style={styles.cropTitle}>{lot.cropName}</Text>
+                  <Text style={styles.lotCode}>
+                    {lot.lotCode} · {lot.variety || 'Standard Bulk'}
                   </Text>
                 </View>
+                <StatusBadge status={lot.status} size="small" />
+              </View>
 
-                <View style={styles.cardFooter}>
-                  <Text style={styles.quantityText}>
-                    📦 {lot.totalQuantityKg.toLocaleString()} kg
-                  </Text>
-                  <View style={styles.startBadge}>
-                    <Text style={styles.startBadgeText}>Start Inspection →</Text>
-                  </View>
+              <View style={styles.orgRow}>
+                <Ionicons name="business-outline" size={14} color={colors.neutralGray} />
+                <Text style={styles.orgName}>{org?.name || 'Local Farm Group'}</Text>
+              </View>
+
+              <View style={styles.locationRow}>
+                <Ionicons name="location-outline" size={14} color={colors.primary} />
+                <Text style={styles.locationText} numberOfLines={2}>
+                  {lot.pickupDistrict}, {lot.pickupSector} ({lot.pickupLocationDetails})
+                </Text>
+              </View>
+
+              <View style={styles.cardFooter}>
+                <Text style={styles.quantityText}>
+                  Volume: {formatQuantity(lot.totalQuantityKg)}
+                </Text>
+                <View style={styles.startBadge}>
+                  <Text style={styles.startBadgeText}>{t.agent.inspectionTask} →</Text>
                 </View>
-              </Card>
-            </TouchableOpacity>
+              </View>
+            </Card>
           ))
         )}
       </ScrollView>
@@ -106,38 +115,46 @@ export const AgentTasksScreen: React.FC<AgentTasksScreenProps> = ({ onSelectTask
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F5F4F6',
+    backgroundColor: colors.background,
   },
   scrollContent: {
-    padding: 16,
-    paddingBottom: 40,
+    padding: spacing.md,
+    paddingBottom: spacing.xxxl + 20,
+  },
+  headerBox: {
+    marginBottom: spacing.md,
   },
   pageTitle: {
-    fontSize: 22,
-    fontWeight: '700',
-    color: colors.neutralDark,
+    ...typography.h2,
+    fontSize: 18,
+    color: colors.neutralHeadings,
   },
   pageSubtitle: {
-    fontSize: 13,
+    ...typography.caption,
     color: colors.neutralGray,
-    marginTop: 4,
-    marginBottom: 16,
+    marginTop: 2,
+  },
+  taskCard: {
+    marginBottom: spacing.sm + 2,
   },
   cardHeader: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginBottom: 8,
+    alignItems: 'center',
+    marginBottom: spacing.sm,
+  },
+  cardHeaderMeta: {
+    flex: 1,
+    marginLeft: spacing.sm,
+    marginRight: spacing.xs,
   },
   cropTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: colors.neutralDark,
+    ...typography.h3,
+    fontSize: 15,
+    color: colors.neutralHeadings,
   },
   lotCode: {
-    fontSize: 12,
+    ...typography.caption,
     color: colors.neutralGray,
-    marginTop: 2,
   },
   orgRow: {
     flexDirection: 'row',
@@ -146,18 +163,20 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   orgName: {
-    fontSize: 13,
+    ...typography.caption,
+    fontSize: 12,
     color: colors.neutralDark,
-    fontWeight: '500',
+    fontWeight: '600',
   },
   locationRow: {
     flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 12,
+    alignItems: 'flex-start',
+    marginBottom: spacing.sm,
     gap: 6,
   },
   locationText: {
-    fontSize: 12,
+    ...typography.caption,
+    fontSize: 11,
     color: colors.neutralGray,
     flex: 1,
   },
@@ -165,23 +184,27 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingTop: 10,
+    paddingTop: spacing.xs + 2,
     borderTopWidth: 1,
-    borderTopColor: colors.border,
+    borderTopColor: colors.borderLight,
   },
   quantityText: {
-    fontSize: 14,
-    fontWeight: '600',
+    ...typography.bodyMedium,
+    fontSize: 12,
+    fontWeight: '700',
     color: colors.neutralDark,
   },
   startBadge: {
-    backgroundColor: '#DCFCE7',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
+    backgroundColor: colors.surfaceHighlighted,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
     borderRadius: radii.full,
+    borderWidth: 1,
+    borderColor: colors.successBorder,
   },
   startBadgeText: {
-    fontSize: 12,
+    ...typography.caption,
+    fontSize: 11,
     fontWeight: '700',
     color: colors.primary,
   },

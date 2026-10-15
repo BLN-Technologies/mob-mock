@@ -8,7 +8,7 @@ import {
   Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { colors, radii } from '../../theme/tokens';
+import { colors, radii, typography, spacing } from '../../theme/tokens';
 import { useTranslation } from '../../i18n';
 import { Button } from '../../components/ui/Button';
 import { Card } from '../../components/ui/Card';
@@ -59,19 +59,24 @@ export const OfflineQueueScreen: React.FC = () => {
     <View style={styles.container}>
       <ScrollView
         contentContainerStyle={styles.scrollContent}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[colors.primary]} />}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[colors.primary]} />
+        }
       >
         <View style={styles.headerRow}>
-          <View>
+          <View style={styles.headerTextWrap}>
             <Text style={styles.title}>{t.agent.offlineQueue}</Text>
-            <Text style={styles.subtitle}>Persistent device queue surviving app restart (FR-QA-03).</Text>
+            <Text style={styles.subtitle}>
+              Persistent device queue surviving app restart (FR-QA-03).
+            </Text>
           </View>
           {items.length > 0 && (
             <Button
               title="Sync All"
               onPress={handleSync}
               loading={syncing}
-              style={styles.syncBtn}
+              size="small"
+              icon={<Ionicons name="sync" size={14} color="#FFFFFF" />}
             />
           )}
         </View>
@@ -84,24 +89,32 @@ export const OfflineQueueScreen: React.FC = () => {
           />
         ) : (
           items.map(item => (
-            <Card key={item.id}>
+            <Card key={item.id} style={styles.queueCard}>
               <View style={styles.itemHeader}>
-                <View>
-                  <Text style={styles.itemType}>{item.type}</Text>
-                  <Text style={styles.opId}>Op ID: {item.id}</Text>
+                <View style={styles.typeRow}>
+                  <Ionicons name="document-text-outline" size={16} color={colors.primary} />
+                  <Text style={styles.itemType}>{item.type.replace(/_/g, ' ')}</Text>
                 </View>
-                <StatusBadge status={item.status} />
+                <StatusBadge status={item.status} size="small" />
               </View>
 
+              <Text style={styles.opId}>Op ID: {item.id}</Text>
+
               <View style={styles.itemDetails}>
-                <Text style={styles.timeText}>
-                  🕒 Recorded: {new Date(item.createdAt).toLocaleTimeString()}
-                </Text>
+                <View style={styles.detailRow}>
+                  <Ionicons name="time-outline" size={13} color={colors.neutralGray} />
+                  <Text style={styles.timeText}>
+                    {new Date(item.createdAt).toLocaleTimeString()}
+                  </Text>
+                </View>
                 <Text style={styles.retryText}>Retries: {item.retryCount}</Text>
               </View>
 
               {item.errorMessage ? (
-                <Text style={styles.errorText}>⚠️ {item.errorMessage}</Text>
+                <View style={styles.errorBox}>
+                  <Ionicons name="alert-circle" size={14} color={colors.danger} />
+                  <Text style={styles.errorText}>{item.errorMessage}</Text>
+                </View>
               ) : null}
             </Card>
           ))
@@ -114,68 +127,93 @@ export const OfflineQueueScreen: React.FC = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F5F4F6',
+    backgroundColor: colors.background,
   },
   scrollContent: {
-    padding: 16,
-    paddingBottom: 40,
+    padding: spacing.md,
+    paddingBottom: spacing.xxxl + 20,
   },
   headerRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 16,
+    marginBottom: spacing.md,
+  },
+  headerTextWrap: {
+    flex: 1,
+    marginRight: spacing.sm,
   },
   title: {
-    fontSize: 22,
-    fontWeight: '700',
-    color: colors.neutralDark,
+    ...typography.h2,
+    fontSize: 18,
+    color: colors.neutralHeadings,
   },
   subtitle: {
-    fontSize: 12,
+    ...typography.caption,
     color: colors.neutralGray,
     marginTop: 2,
-    maxWidth: 240,
   },
-  syncBtn: {
-    minHeight: 40,
-    paddingHorizontal: 14,
+  queueCard: {
+    marginBottom: spacing.sm + 2,
   },
   itemHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginBottom: 8,
+    alignItems: 'center',
+    marginBottom: spacing.xs,
+  },
+  typeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
   },
   itemType: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: colors.neutralDark,
+    ...typography.h3,
+    fontSize: 14,
+    color: colors.neutralHeadings,
   },
   opId: {
-    fontSize: 11,
+    ...typography.caption,
+    fontSize: 10,
     color: colors.neutralGray,
-    fontFamily: 'monospace',
-    marginTop: 2,
+    marginBottom: spacing.xs,
   },
   itemDetails: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    paddingTop: 8,
+    alignItems: 'center',
+    paddingTop: spacing.xs,
     borderTopWidth: 1,
-    borderTopColor: colors.border,
+    borderTopColor: colors.borderLight,
+  },
+  detailRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
   },
   timeText: {
-    fontSize: 12,
+    ...typography.caption,
+    fontSize: 11,
     color: colors.neutralDark,
   },
   retryText: {
-    fontSize: 12,
+    ...typography.caption,
+    fontSize: 11,
     color: colors.neutralGray,
   },
+  errorBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.dangerLight,
+    padding: spacing.xs + 2,
+    borderRadius: radii.xs,
+    marginTop: spacing.xs,
+    gap: 4,
+  },
   errorText: {
-    fontSize: 12,
+    ...typography.caption,
+    fontSize: 11,
     color: colors.danger,
-    marginTop: 6,
+    flex: 1,
   },
 });

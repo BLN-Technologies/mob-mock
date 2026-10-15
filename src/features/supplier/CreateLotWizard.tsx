@@ -8,10 +8,11 @@ import {
   Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { colors, radii } from '../../theme/tokens';
+import { colors, radii, shadows, typography, spacing } from '../../theme/tokens';
 import { useTranslation } from '../../i18n';
 import { Button } from '../../components/ui/Button';
 import { FormField } from '../../components/forms/FormField';
+import { CropBadge } from '../../components/ui/CropBadge';
 import { lotService } from '../../services/mock/mockServices';
 import { localStorage } from '../../data/local/storage';
 import { User } from '../../domain/models';
@@ -21,6 +22,15 @@ interface CreateLotWizardProps {
   onSuccess: () => void;
   onCancel: () => void;
 }
+
+const COMMON_CROPS = [
+  { name: 'Maize', variety: 'Nyirakaragaza' },
+  { name: 'Dry Beans', variety: 'Yellow Beans' },
+  { name: 'Rice', variety: 'Kigori / Basmati' },
+  { name: 'Soybeans', variety: 'Sopetrad' },
+  { name: 'Irish Potatoes', variety: 'Kinigi' },
+  { name: 'Coffee', variety: 'Arabica' },
+];
 
 export const CreateLotWizard: React.FC<CreateLotWizardProps> = ({
   user,
@@ -58,7 +68,7 @@ export const CreateLotWizard: React.FC<CreateLotWizardProps> = ({
         pickupDistrict,
         savedAt: new Date().toISOString(),
       });
-      Alert.alert('Draft Saved', 'Your lot declaration draft has been saved on this device.');
+      Alert.alert(t.common.appName, 'Your lot declaration draft has been saved on this device.');
     } catch (e: any) {
       Alert.alert('Error', e.message);
     }
@@ -85,9 +95,9 @@ export const CreateLotWizard: React.FC<CreateLotWizardProps> = ({
         user
       );
       Alert.alert(
-        'Lot Submitted',
+        t.common.appName,
         'Your harvest lot declaration has been submitted for field agent grading and inspection (FR-LOT-01).',
-        [{ text: 'OK', onPress: onSuccess }]
+        [{ text: t.common.done, onPress: onSuccess }]
       );
     } catch (err: any) {
       setError(err.message || 'Submission failed');
@@ -114,9 +124,9 @@ export const CreateLotWizard: React.FC<CreateLotWizardProps> = ({
       </View>
 
       <Text style={styles.wizardTitle}>
-        {step === 1 && 'Step 1: Crop & Quantity'}
-        {step === 2 && 'Step 2: Harvest Verification'}
-        {step === 3 && 'Step 3: Location & Photos'}
+        {step === 1 && `1. ${t.supplier.lotInformation}`}
+        {step === 2 && `2. ${t.supplier.harvestDate} & BR-01`}
+        {step === 3 && `3. ${t.supplier.pickupLocation}`}
       </Text>
 
       {error ? (
@@ -128,6 +138,30 @@ export const CreateLotWizard: React.FC<CreateLotWizardProps> = ({
 
       {step === 1 && (
         <View>
+          {/* Staple Crop Selector Chips */}
+          <Text style={styles.selectorLabel}>Select Staple Crop:</Text>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.cropSelectorRow}>
+            {COMMON_CROPS.map(c => {
+              const isSelected = cropName.toLowerCase() === c.name.toLowerCase();
+              return (
+                <TouchableOpacity
+                  key={c.name}
+                  style={[styles.cropChip, isSelected && styles.cropChipActive]}
+                  onPress={() => {
+                    setCropName(c.name);
+                    setVariety(c.variety);
+                  }}
+                  activeOpacity={0.8}
+                >
+                  <CropBadge cropName={c.name} size="small" />
+                  <Text style={[styles.cropChipText, isSelected && styles.cropChipTextActive]}>
+                    {c.name}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </ScrollView>
+
           <FormField
             label={t.supplier.cropType}
             value={cropName}
@@ -146,6 +180,7 @@ export const CreateLotWizard: React.FC<CreateLotWizardProps> = ({
             onChangeText={setTotalQuantityKg}
             keyboardType="numeric"
             placeholder="5000"
+            suffix="kg"
             helper="Minimum quantity is 50 kg"
           />
           <FormField
@@ -154,7 +189,9 @@ export const CreateLotWizard: React.FC<CreateLotWizardProps> = ({
             onChangeText={setPricePerKgRwf}
             keyboardType="numeric"
             placeholder="420"
-            helper="Whole number in Rwandan Francs"
+            prefix="RWF"
+            suffix="/ kg"
+            helper="Expected price in whole Rwandan Francs"
           />
         </View>
       )}
@@ -166,6 +203,8 @@ export const CreateLotWizard: React.FC<CreateLotWizardProps> = ({
             style={styles.checkboxContainer}
             onPress={() => setHarvestConfirmed(!harvestConfirmed)}
             activeOpacity={0.8}
+            accessibilityRole="checkbox"
+            accessibilityState={{ checked: harvestConfirmed }}
           >
             <View style={[styles.checkbox, harvestConfirmed && styles.checkboxActive]}>
               {harvestConfirmed && <Ionicons name="checkmark" size={16} color="#FFF" />}
@@ -178,7 +217,8 @@ export const CreateLotWizard: React.FC<CreateLotWizardProps> = ({
             value={harvestDate}
             onChangeText={setHarvestDate}
             placeholder="YYYY-MM-DD"
-            helper="Must be today or earlier (BR-01)"
+            prefix="📅"
+            helper="Must be today or earlier (BR-01 strict rule)"
           />
 
           <FormField
@@ -186,7 +226,8 @@ export const CreateLotWizard: React.FC<CreateLotWizardProps> = ({
             value={availabilityDate}
             onChangeText={setAvailabilityDate}
             placeholder="YYYY-MM-DD"
-            helper="Date produce is ready for pickup/dispatch"
+            prefix="📦"
+            helper="Date produce is packaged & ready for warehouse pickup"
           />
         </View>
       )}
@@ -198,6 +239,7 @@ export const CreateLotWizard: React.FC<CreateLotWizardProps> = ({
             value={pickupDistrict}
             onChangeText={setPickupDistrict}
             placeholder="e.g. Nyagatare, Huye, Musanze"
+            prefix="📍"
           />
 
           <FormField
@@ -205,6 +247,7 @@ export const CreateLotWizard: React.FC<CreateLotWizardProps> = ({
             value={pickupSector}
             onChangeText={setPickupSector}
             placeholder="e.g. Karangazi"
+            prefix="📍"
           />
 
           <FormField
@@ -213,13 +256,14 @@ export const CreateLotWizard: React.FC<CreateLotWizardProps> = ({
             onChangeText={setPickupLocationDetails}
             multiline
             numberOfLines={2}
-            placeholder="Warehouse address or collection point"
+            placeholder="Warehouse address or cooperative collection centre"
           />
 
           <Text style={styles.photoHeader}>{t.supplier.photoEvidence}:</Text>
           <View style={styles.photoPreviewCard}>
-            <Ionicons name="image-outline" size={32} color={colors.primary} />
+            <Ionicons name="image" size={36} color={colors.primary} />
             <Text style={styles.photoCountText}>1 Produce Photo Attached</Text>
+            <Text style={styles.photoSubText}>Meets minimum visual evidence standard</Text>
           </View>
         </View>
       )}
@@ -262,6 +306,7 @@ export const CreateLotWizard: React.FC<CreateLotWizardProps> = ({
         title={t.supplier.saveDraft}
         onPress={handleSaveDraft}
         variant="text"
+        icon={<Ionicons name="save-outline" size={16} color={colors.primary} />}
         style={styles.draftBtn}
       />
     </ScrollView>
@@ -271,17 +316,17 @@ export const CreateLotWizard: React.FC<CreateLotWizardProps> = ({
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F5F4F6',
+    backgroundColor: colors.background,
   },
   scrollContent: {
-    padding: 20,
-    paddingBottom: 40,
+    padding: spacing.md,
+    paddingBottom: spacing.xxxl + 20,
   },
   stepIndicatorRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    marginVertical: 16,
+    marginVertical: spacing.md,
   },
   stepDot: {
     width: 32,
@@ -297,12 +342,13 @@ const styles = StyleSheet.create({
   stepDotText: {
     color: '#64748B',
     fontWeight: '700',
+    fontSize: 13,
   },
   stepDotTextActive: {
     color: '#FFFFFF',
   },
   stepLine: {
-    width: 48,
+    width: 44,
     height: 3,
     backgroundColor: '#E2E8F0',
     marginHorizontal: 4,
@@ -311,90 +357,132 @@ const styles = StyleSheet.create({
     backgroundColor: colors.primary,
   },
   wizardTitle: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: colors.neutralDark,
-    marginBottom: 20,
+    ...typography.h3,
+    fontSize: 17,
+    color: colors.neutralHeadings,
+    marginBottom: spacing.md,
     textAlign: 'center',
+  },
+  selectorLabel: {
+    ...typography.caption,
+    fontSize: 12,
+    fontWeight: '700',
+    color: colors.neutralGray,
+    marginBottom: spacing.xs,
+    textTransform: 'uppercase',
+  },
+  cropSelectorRow: {
+    marginBottom: spacing.md,
+  },
+  cropChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: radii.md,
+    borderWidth: 1.5,
+    borderColor: colors.border,
+    marginRight: spacing.xs + 2,
+    gap: 6,
+  },
+  cropChipActive: {
+    borderColor: colors.primary,
+    backgroundColor: colors.surfaceHighlighted,
+  },
+  cropChipText: {
+    ...typography.caption,
+    fontSize: 12,
+    fontWeight: '600',
+    color: colors.neutralDark,
+  },
+  cropChipTextActive: {
+    color: colors.primary,
+    fontWeight: '700',
   },
   errorBox: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: colors.dangerLight,
-    padding: 12,
+    padding: spacing.sm,
     borderRadius: radii.md,
-    marginBottom: 16,
+    marginBottom: spacing.md,
   },
   errorText: {
+    ...typography.caption,
     color: colors.danger,
-    fontSize: 13,
-    marginLeft: 8,
+    marginLeft: spacing.xs,
     flex: 1,
   },
   checkboxContainer: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    backgroundColor: '#FEF3C7',
-    padding: 14,
+    backgroundColor: colors.warningLight,
+    padding: spacing.md,
     borderRadius: radii.md,
-    borderWidth: 1,
-    borderColor: '#FCD34D',
-    marginBottom: 16,
+    borderWidth: 1.5,
+    borderColor: colors.warningBorder,
+    marginBottom: spacing.md,
   },
   checkbox: {
     width: 22,
     height: 22,
     borderRadius: 4,
     borderWidth: 2,
-    borderColor: '#B45309',
+    borderColor: colors.warningDark,
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: 10,
+    marginRight: spacing.sm,
     marginTop: 2,
-    backgroundColor: '#FFF',
+    backgroundColor: '#FFFFFF',
   },
   checkboxActive: {
     backgroundColor: colors.primary,
     borderColor: colors.primary,
   },
   checkboxLabel: {
+    ...typography.bodyMedium,
     fontSize: 13,
-    fontWeight: '600',
-    color: '#92400E',
+    color: colors.warningDark,
     flex: 1,
     lineHeight: 18,
   },
   photoHeader: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: colors.neutralDark,
-    marginBottom: 8,
+    ...typography.bodyMedium,
+    fontSize: 13,
+    color: colors.neutralHeadings,
+    marginBottom: spacing.xs,
   },
   photoPreviewCard: {
-    backgroundColor: '#FFF',
+    backgroundColor: '#FFFFFF',
     borderWidth: 1.5,
     borderColor: colors.border,
     borderRadius: radii.md,
-    padding: 20,
+    padding: spacing.lg,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 20,
+    marginBottom: spacing.lg,
   },
   photoCountText: {
-    marginTop: 6,
+    marginTop: spacing.xs,
+    ...typography.bodyMedium,
     fontSize: 13,
-    color: colors.neutralDark,
-    fontWeight: '500',
+    color: colors.neutralHeadings,
+  },
+  photoSubText: {
+    ...typography.caption,
+    color: colors.neutralGray,
+    marginTop: 2,
   },
   buttonRow: {
     flexDirection: 'row',
-    gap: 12,
-    marginTop: 12,
+    gap: spacing.sm,
+    marginTop: spacing.md,
   },
   btnHalf: {
     flex: 1,
   },
   draftBtn: {
-    marginTop: 12,
+    marginTop: spacing.sm,
   },
 });

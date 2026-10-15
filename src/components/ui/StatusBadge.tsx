@@ -1,18 +1,20 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
-import { colors, radii } from '../../theme/tokens';
+import { Ionicons } from '@expo/vector-icons';
+import { colors, radii, typography, spacing } from '../../theme/tokens';
 import { useTranslation } from '../../i18n';
 
 interface StatusBadgeProps {
   status: string;
+  size?: 'small' | 'medium';
 }
 
-export const StatusBadge: React.FC<StatusBadgeProps> = ({ status }) => {
+export const StatusBadge: React.FC<StatusBadgeProps> = ({ status, size = 'medium' }) => {
   const { t } = useTranslation();
 
-  const getStyleAndLabel = () => {
+  const getStyleAndMeta = () => {
     switch (status) {
-      // Lot & Order Verified / Success states
+      // Verified / Success
       case 'VERIFIED':
       case 'CONFIRMED':
       case 'PAID':
@@ -21,11 +23,13 @@ export const StatusBadge: React.FC<StatusBadgeProps> = ({ status }) => {
       case 'GRADE_A':
         return {
           bg: colors.successLight,
-          textColor: colors.success,
+          textColor: colors.successDark,
+          borderColor: colors.successBorder,
+          icon: 'checkmark-circle' as const,
           label: (t.statuses as any)[status] || status,
         };
 
-      // In Progress / Warning / Attention states
+      // In Progress / Warning
       case 'SUBMITTED':
       case 'PAYMENT_PENDING':
       case 'DISPATCHED':
@@ -34,11 +38,13 @@ export const StatusBadge: React.FC<StatusBadgeProps> = ({ status }) => {
       case 'GRADE_B':
         return {
           bg: colors.warningLight,
-          textColor: '#B45309', // Dark amber for readability
+          textColor: colors.warningDark,
+          borderColor: colors.warningBorder,
+          icon: 'time' as const,
           label: (t.statuses as any)[status] || status,
         };
 
-      // Disputed / Rejected / Danger states
+      // Disputed / Danger
       case 'REJECTED':
       case 'DECLINED':
       case 'CANCELLED':
@@ -46,11 +52,24 @@ export const StatusBadge: React.FC<StatusBadgeProps> = ({ status }) => {
       case 'REJECT':
         return {
           bg: colors.dangerLight,
-          textColor: colors.danger,
+          textColor: colors.dangerDark,
+          borderColor: colors.dangerBorder,
+          icon: 'alert-circle' as const,
           label: (t.statuses as any)[status] || status,
         };
 
-      // Draft / Offline / Neutral states
+      // Reserved / Info
+      case 'RESERVED':
+      case 'SOLD':
+        return {
+          bg: colors.infoLight,
+          textColor: colors.infoDark,
+          borderColor: colors.infoBorder,
+          icon: 'lock-closed' as const,
+          label: (t.statuses as any)[status] || status,
+        };
+
+      // Draft / Offline / Neutral
       case 'DRAFT':
       case 'WITHDRAWN':
       case 'EXPIRED':
@@ -59,17 +78,46 @@ export const StatusBadge: React.FC<StatusBadgeProps> = ({ status }) => {
         return {
           bg: colors.draftLight,
           textColor: colors.draft,
+          borderColor: colors.draftBorder,
+          icon: 'document-text-outline' as const,
           label: (t.statuses as any)[status] || status,
         };
     }
   };
 
-  const { bg, textColor, label } = getStyleAndLabel();
+  const meta = getStyleAndMeta();
+  const isSmall = size === 'small';
 
   return (
-    <View style={[styles.badge, { backgroundColor: bg }]}>
-      <View style={[styles.dot, { backgroundColor: textColor }]} />
-      <Text style={[styles.text, { color: textColor }]}>{label}</Text>
+    <View
+      style={[
+        styles.badge,
+        {
+          backgroundColor: meta.bg,
+          borderColor: meta.borderColor,
+          paddingVertical: isSmall ? 2 : 4,
+          paddingHorizontal: isSmall ? 8 : 10,
+        },
+      ]}
+    >
+      <Ionicons
+        name={meta.icon}
+        size={isSmall ? 11 : 13}
+        color={meta.textColor}
+        style={styles.icon}
+      />
+      <Text
+        style={[
+          styles.text,
+          {
+            color: meta.textColor,
+            fontSize: isSmall ? 10 : 11,
+          },
+        ]}
+        numberOfLines={1}
+      >
+        {meta.label}
+      </Text>
     </View>
   );
 };
@@ -78,19 +126,15 @@ const styles = StyleSheet.create({
   badge: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 10,
-    paddingVertical: 4,
     borderRadius: radii.full,
+    borderWidth: 1,
     alignSelf: 'flex-start',
   },
-  dot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    marginRight: 6,
+  icon: {
+    marginRight: 4,
   },
   text: {
-    fontSize: 12,
-    fontWeight: '600',
+    ...typography.caption,
+    fontWeight: '700',
   },
 });

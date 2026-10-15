@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { colors, radii } from '../../theme/tokens';
+import { colors, radii, typography, spacing, shadows } from '../../theme/tokens';
 import { useTranslation } from '../../i18n';
 import { Button } from '../../components/ui/Button';
 import { User } from '../../domain/models';
@@ -21,11 +21,13 @@ export const AdminHandoffScreen: React.FC<AdminHandoffScreenProps> = ({
     <View style={styles.container}>
       <View style={styles.contentCard}>
         <View style={styles.iconCircle}>
-          <Ionicons name="desktop-outline" size={48} color={colors.primary} />
+          <Ionicons name="desktop-outline" size={44} color={colors.primary} />
         </View>
 
         <Text style={styles.title}>{t.adminHandoff.title}</Text>
-        <Text style={styles.userName}>Logged in as: {user.fullName} (Administrator)</Text>
+        <Text style={styles.userName}>
+          Logged in as: {user.fullName} (Administrator)
+        </Text>
 
         <Text style={styles.noticeText}>
           {t.adminHandoff.notice}
@@ -36,6 +38,7 @@ export const AdminHandoffScreen: React.FC<AdminHandoffScreenProps> = ({
         </Text>
 
         <View style={styles.urlBox}>
+          <Ionicons name="link-outline" size={16} color={colors.primary} />
           <Text style={styles.urlText}>https://admin.cargo.rw</Text>
         </View>
 
@@ -43,7 +46,9 @@ export const AdminHandoffScreen: React.FC<AdminHandoffScreenProps> = ({
           title={t.common.logout}
           onPress={onLogout}
           variant="secondary"
-          style={styles.logoutBtn}
+          size="medium"
+          fullWidth
+          icon={<Ionicons name="log-out-outline" size={18} color={colors.neutralDark} />}
         />
       </View>
     </View>
@@ -53,73 +58,78 @@ export const AdminHandoffScreen: React.FC<AdminHandoffScreenProps> = ({
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F5F4F6',
+    backgroundColor: colors.background,
     justifyContent: 'center',
     alignItems: 'center',
-    padding: 20,
+    padding: spacing.lg,
   },
   contentCard: {
-    backgroundColor: colors.surface,
-    borderRadius: radii.lg,
-    padding: 24,
+    backgroundColor: '#FFFFFF',
+    borderRadius: radii.xl,
+    padding: spacing.xl,
     alignItems: 'center',
     width: '100%',
     maxWidth: 380,
     borderWidth: 1,
     borderColor: colors.border,
+    ...shadows.md,
   },
   iconCircle: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    backgroundColor: colors.successLight,
+    width: 76,
+    height: 76,
+    borderRadius: 38,
+    backgroundColor: colors.surfaceHighlighted,
+    borderWidth: 1.5,
+    borderColor: colors.successBorder,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 16,
+    marginBottom: spacing.md,
   },
   title: {
+    ...typography.h2,
     fontSize: 20,
-    fontWeight: '700',
-    color: colors.neutralDark,
+    color: colors.neutralHeadings,
     textAlign: 'center',
   },
   userName: {
-    fontSize: 13,
+    ...typography.caption,
+    fontSize: 12,
     color: colors.primary,
-    fontWeight: '600',
-    marginTop: 4,
-    marginBottom: 16,
+    fontWeight: '700',
+    marginTop: spacing.xs,
+    marginBottom: spacing.md,
   },
   noticeText: {
-    fontSize: 14,
+    ...typography.body,
+    fontSize: 13,
     color: colors.neutralDark,
     textAlign: 'center',
-    lineHeight: 20,
-    marginBottom: 12,
+    lineHeight: 19,
+    marginBottom: spacing.sm,
   },
   instructionText: {
-    fontSize: 13,
+    ...typography.caption,
     color: colors.neutralGray,
     textAlign: 'center',
     lineHeight: 18,
-    marginBottom: 16,
+    marginBottom: spacing.md,
   },
   urlBox: {
-    backgroundColor: '#F1F5F9',
-    paddingVertical: 10,
-    paddingHorizontal: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: colors.surfaceSubtle,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
     borderRadius: radii.md,
     borderWidth: 1,
     borderColor: colors.border,
-    marginBottom: 20,
+    marginBottom: spacing.lg,
   },
   urlText: {
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '700',
     color: colors.neutralDark,
     fontFamily: 'monospace',
-  },
-  logoutBtn: {
-    width: '100%',
   },
 });

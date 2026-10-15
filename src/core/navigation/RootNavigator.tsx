@@ -2,9 +2,10 @@ import React, { useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { colors, radii } from '../../theme/tokens';
+import { colors, radii, shadows, typography, spacing } from '../../theme/tokens';
 import { useTranslation } from '../../i18n';
 import { SplashScreen } from '../bootstrap/SplashScreen';
+import { TopAppBar } from '../../components/navigation/TopAppBar';
 import { LoginScreen } from '../../features/auth/LoginScreen';
 import { AdminHandoffScreen } from '../../features/admin-handoff/AdminHandoffScreen';
 
@@ -69,7 +70,13 @@ export const RootNavigator: React.FC = () => {
       <LoginScreen
         onLoginSuccess={user => {
           setCurrentUser(user);
-          setActiveTab(user.role === UserRole.FIELD_AGENT ? 'tasks' : user.role === UserRole.BUYER ? 'catalogue' : 'home');
+          setActiveTab(
+            user.role === UserRole.FIELD_AGENT
+              ? 'tasks'
+              : user.role === UserRole.BUYER
+              ? 'catalogue'
+              : 'home'
+          );
         }}
       />
     );
@@ -85,11 +92,42 @@ export const RootNavigator: React.FC = () => {
     );
   }
 
+  // Get active tab title for TopAppBar
+  const getTabTitle = () => {
+    switch (activeTab) {
+      case 'home':
+        return t.tabs.home;
+      case 'lots':
+        return t.tabs.lots;
+      case 'orders':
+        return t.tabs.orders;
+      case 'tasks':
+        return t.tabs.tasks;
+      case 'queue':
+        return t.tabs.queue;
+      case 'catalogue':
+        return t.tabs.catalogue;
+      case 'offers':
+        return t.tabs.offers;
+      case 'notifications':
+        return t.tabs.notifications;
+      case 'profile':
+        return t.tabs.profile;
+      default:
+        return t.common.appName;
+    }
+  };
+
   // 2. Supplier Navigation Shell
   if (currentUser.role === UserRole.SUPPLIER) {
     if (showCreateLot) {
       return (
-        <SafeAreaView style={styles.safeArea}>
+        <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right']}>
+          <TopAppBar
+            title={t.supplier.createNewLot}
+            showBack
+            onBack={() => setShowCreateLot(false)}
+          />
           <CreateLotWizard
             user={currentUser}
             onSuccess={() => {
@@ -103,7 +141,15 @@ export const RootNavigator: React.FC = () => {
     }
 
     return (
-      <SafeAreaView style={styles.safeArea}>
+      <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right']}>
+        {/* Unified Top App Bar */}
+        <TopAppBar
+          title={getTabTitle()}
+          user={currentUser}
+          onNotificationPress={() => setActiveTab('notifications')}
+          onProfilePress={() => setActiveTab('profile')}
+        />
+
         <View style={styles.screenContainer}>
           {activeTab === 'home' && (
             <SupplierHomeScreen
@@ -130,31 +176,106 @@ export const RootNavigator: React.FC = () => {
               user={currentUser}
               onLogout={() => setCurrentUser(null)}
               onResetComplete={() => setActiveTab('home')}
+              onUserUpdated={updated => setCurrentUser(updated)}
             />
           )}
         </View>
 
-        {/* Bottom Tab Bar */}
+        {/* Polished Bottom Tab Bar */}
         <View style={styles.tabBar}>
-          <TouchableOpacity style={styles.tabItem} onPress={() => setActiveTab('home')}>
-            <Ionicons name="home-outline" size={22} color={activeTab === 'home' ? colors.primary : '#94A3B8'} />
-            <Text style={[styles.tabLabel, activeTab === 'home' && styles.tabLabelActive]}>Home</Text>
+          <TouchableOpacity
+            style={[styles.tabItem, activeTab === 'home' && styles.tabItemActive]}
+            onPress={() => setActiveTab('home')}
+            activeOpacity={0.8}
+            accessibilityRole="tab"
+          >
+            <Ionicons
+              name={activeTab === 'home' ? 'home' : 'home-outline'}
+              size={20}
+              color={activeTab === 'home' ? colors.primary : colors.neutralLight}
+            />
+            <Text
+              style={[styles.tabLabel, activeTab === 'home' && styles.tabLabelActive]}
+              numberOfLines={1}
+            >
+              {t.tabs.home}
+            </Text>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.tabItem} onPress={() => setActiveTab('lots')}>
-            <Ionicons name="cube-outline" size={22} color={activeTab === 'lots' ? colors.primary : '#94A3B8'} />
-            <Text style={[styles.tabLabel, activeTab === 'lots' && styles.tabLabelActive]}>Lots</Text>
+
+          <TouchableOpacity
+            style={[styles.tabItem, activeTab === 'lots' && styles.tabItemActive]}
+            onPress={() => setActiveTab('lots')}
+            activeOpacity={0.8}
+            accessibilityRole="tab"
+          >
+            <Ionicons
+              name={activeTab === 'lots' ? 'cube' : 'cube-outline'}
+              size={20}
+              color={activeTab === 'lots' ? colors.primary : colors.neutralLight}
+            />
+            <Text
+              style={[styles.tabLabel, activeTab === 'lots' && styles.tabLabelActive]}
+              numberOfLines={1}
+            >
+              {t.tabs.lots}
+            </Text>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.tabItem} onPress={() => setActiveTab('orders')}>
-            <Ionicons name="cart-outline" size={22} color={activeTab === 'orders' ? colors.primary : '#94A3B8'} />
-            <Text style={[styles.tabLabel, activeTab === 'orders' && styles.tabLabelActive]}>Orders</Text>
+
+          <TouchableOpacity
+            style={[styles.tabItem, activeTab === 'orders' && styles.tabItemActive]}
+            onPress={() => setActiveTab('orders')}
+            activeOpacity={0.8}
+            accessibilityRole="tab"
+          >
+            <Ionicons
+              name={activeTab === 'orders' ? 'cart' : 'cart-outline'}
+              size={20}
+              color={activeTab === 'orders' ? colors.primary : colors.neutralLight}
+            />
+            <Text
+              style={[styles.tabLabel, activeTab === 'orders' && styles.tabLabelActive]}
+              numberOfLines={1}
+            >
+              {t.tabs.orders}
+            </Text>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.tabItem} onPress={() => setActiveTab('notifications')}>
-            <Ionicons name="notifications-outline" size={22} color={activeTab === 'notifications' ? colors.primary : '#94A3B8'} />
-            <Text style={[styles.tabLabel, activeTab === 'notifications' && styles.tabLabelActive]}>Inbox</Text>
+
+          <TouchableOpacity
+            style={[styles.tabItem, activeTab === 'notifications' && styles.tabItemActive]}
+            onPress={() => setActiveTab('notifications')}
+            activeOpacity={0.8}
+            accessibilityRole="tab"
+          >
+            <Ionicons
+              name={activeTab === 'notifications' ? 'notifications' : 'notifications-outline'}
+              size={20}
+              color={activeTab === 'notifications' ? colors.primary : colors.neutralLight}
+            />
+            <Text
+              style={[styles.tabLabel, activeTab === 'notifications' && styles.tabLabelActive]}
+              numberOfLines={1}
+            >
+              {t.tabs.notifications}
+            </Text>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.tabItem} onPress={() => setActiveTab('profile')}>
-            <Ionicons name="person-outline" size={22} color={activeTab === 'profile' ? colors.primary : '#94A3B8'} />
-            <Text style={[styles.tabLabel, activeTab === 'profile' && styles.tabLabelActive]}>Profile</Text>
+
+          <TouchableOpacity
+            style={[styles.tabItem, activeTab === 'profile' && styles.tabItemActive]}
+            onPress={() => setActiveTab('profile')}
+            activeOpacity={0.8}
+            accessibilityRole="tab"
+          >
+            <Ionicons
+              name={activeTab === 'profile' ? 'person' : 'person-outline'}
+              size={20}
+              color={activeTab === 'profile' ? colors.primary : colors.neutralLight}
+            />
+            <Text
+              style={[styles.tabLabel, activeTab === 'profile' && styles.tabLabelActive]}
+              numberOfLines={1}
+            >
+              {t.tabs.profile}
+            </Text>
           </TouchableOpacity>
         </View>
       </SafeAreaView>
@@ -165,7 +286,12 @@ export const RootNavigator: React.FC = () => {
   if (currentUser.role === UserRole.FIELD_AGENT) {
     if (activeTask) {
       return (
-        <SafeAreaView style={styles.safeArea}>
+        <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right']}>
+          <TopAppBar
+            title={t.agent.inspectionTask}
+            showBack
+            onBack={() => setActiveTask(null)}
+          />
           <GradingFormScreen
             lot={activeTask.lot}
             org={activeTask.org}
@@ -181,7 +307,15 @@ export const RootNavigator: React.FC = () => {
     }
 
     return (
-      <SafeAreaView style={styles.safeArea}>
+      <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right']}>
+        {/* Unified Top App Bar */}
+        <TopAppBar
+          title={getTabTitle()}
+          user={currentUser}
+          onNotificationPress={() => setActiveTab('notifications')}
+          onProfilePress={() => setActiveTab('profile')}
+        />
+
         <View style={styles.screenContainer}>
           {activeTab === 'tasks' && (
             <AgentTasksScreen
@@ -199,27 +333,87 @@ export const RootNavigator: React.FC = () => {
               user={currentUser}
               onLogout={() => setCurrentUser(null)}
               onResetComplete={() => setActiveTab('tasks')}
+              onUserUpdated={updated => setCurrentUser(updated)}
             />
           )}
         </View>
 
         {/* Agent Bottom Tab Bar */}
         <View style={styles.tabBar}>
-          <TouchableOpacity style={styles.tabItem} onPress={() => setActiveTab('tasks')}>
-            <Ionicons name="clipboard-outline" size={22} color={activeTab === 'tasks' ? colors.primary : '#94A3B8'} />
-            <Text style={[styles.tabLabel, activeTab === 'tasks' && styles.tabLabelActive]}>Tasks</Text>
+          <TouchableOpacity
+            style={[styles.tabItem, activeTab === 'tasks' && styles.tabItemActive]}
+            onPress={() => setActiveTab('tasks')}
+            activeOpacity={0.8}
+            accessibilityRole="tab"
+          >
+            <Ionicons
+              name={activeTab === 'tasks' ? 'clipboard' : 'clipboard-outline'}
+              size={20}
+              color={activeTab === 'tasks' ? colors.primary : colors.neutralLight}
+            />
+            <Text
+              style={[styles.tabLabel, activeTab === 'tasks' && styles.tabLabelActive]}
+              numberOfLines={1}
+            >
+              {t.tabs.tasks}
+            </Text>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.tabItem} onPress={() => setActiveTab('queue')}>
-            <Ionicons name="cloud-offline-outline" size={22} color={activeTab === 'queue' ? colors.primary : '#94A3B8'} />
-            <Text style={[styles.tabLabel, activeTab === 'queue' && styles.tabLabelActive]}>Queue</Text>
+
+          <TouchableOpacity
+            style={[styles.tabItem, activeTab === 'queue' && styles.tabItemActive]}
+            onPress={() => setActiveTab('queue')}
+            activeOpacity={0.8}
+            accessibilityRole="tab"
+          >
+            <Ionicons
+              name={activeTab === 'queue' ? 'cloud-done' : 'cloud-offline-outline'}
+              size={20}
+              color={activeTab === 'queue' ? colors.primary : colors.neutralLight}
+            />
+            <Text
+              style={[styles.tabLabel, activeTab === 'queue' && styles.tabLabelActive]}
+              numberOfLines={1}
+            >
+              {t.tabs.queue}
+            </Text>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.tabItem} onPress={() => setActiveTab('notifications')}>
-            <Ionicons name="notifications-outline" size={22} color={activeTab === 'notifications' ? colors.primary : '#94A3B8'} />
-            <Text style={[styles.tabLabel, activeTab === 'notifications' && styles.tabLabelActive]}>Inbox</Text>
+
+          <TouchableOpacity
+            style={[styles.tabItem, activeTab === 'notifications' && styles.tabItemActive]}
+            onPress={() => setActiveTab('notifications')}
+            activeOpacity={0.8}
+            accessibilityRole="tab"
+          >
+            <Ionicons
+              name={activeTab === 'notifications' ? 'notifications' : 'notifications-outline'}
+              size={20}
+              color={activeTab === 'notifications' ? colors.primary : colors.neutralLight}
+            />
+            <Text
+              style={[styles.tabLabel, activeTab === 'notifications' && styles.tabLabelActive]}
+              numberOfLines={1}
+            >
+              {t.tabs.notifications}
+            </Text>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.tabItem} onPress={() => setActiveTab('profile')}>
-            <Ionicons name="person-outline" size={22} color={activeTab === 'profile' ? colors.primary : '#94A3B8'} />
-            <Text style={[styles.tabLabel, activeTab === 'profile' && styles.tabLabelActive]}>Profile</Text>
+
+          <TouchableOpacity
+            style={[styles.tabItem, activeTab === 'profile' && styles.tabItemActive]}
+            onPress={() => setActiveTab('profile')}
+            activeOpacity={0.8}
+            accessibilityRole="tab"
+          >
+            <Ionicons
+              name={activeTab === 'profile' ? 'person' : 'person-outline'}
+              size={20}
+              color={activeTab === 'profile' ? colors.primary : colors.neutralLight}
+            />
+            <Text
+              style={[styles.tabLabel, activeTab === 'profile' && styles.tabLabelActive]}
+              numberOfLines={1}
+            >
+              {t.tabs.profile}
+            </Text>
           </TouchableOpacity>
         </View>
       </SafeAreaView>
@@ -230,7 +424,12 @@ export const RootNavigator: React.FC = () => {
   if (currentUser.role === UserRole.BUYER) {
     if (showCreateRequest) {
       return (
-        <SafeAreaView style={styles.safeArea}>
+        <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right']}>
+          <TopAppBar
+            title={t.buyer.postRequest}
+            showBack
+            onBack={() => setShowCreateRequest(false)}
+          />
           <CreateRequestScreen
             user={currentUser}
             onSuccess={() => setShowCreateRequest(false)}
@@ -242,7 +441,12 @@ export const RootNavigator: React.FC = () => {
 
     if (selectedBuyerLot) {
       return (
-        <SafeAreaView style={styles.safeArea}>
+        <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right']}>
+          <TopAppBar
+            title={selectedBuyerLot.cropName}
+            showBack
+            onBack={() => setSelectedBuyerLot(null)}
+          />
           <LotDetailScreen
             lot={selectedBuyerLot}
             user={currentUser}
@@ -258,7 +462,12 @@ export const RootNavigator: React.FC = () => {
 
     if (selectedBuyerOrder) {
       return (
-        <SafeAreaView style={styles.safeArea}>
+        <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right']}>
+          <TopAppBar
+            title={selectedBuyerOrder.orderNumber}
+            showBack
+            onBack={() => setSelectedBuyerOrder(null)}
+          />
           <BuyerOrderDetailScreen
             order={selectedBuyerOrder}
             user={currentUser}
@@ -270,7 +479,15 @@ export const RootNavigator: React.FC = () => {
     }
 
     return (
-      <SafeAreaView style={styles.safeArea}>
+      <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right']}>
+        {/* Unified Top App Bar */}
+        <TopAppBar
+          title={getTabTitle()}
+          user={currentUser}
+          onNotificationPress={() => setActiveTab('notifications')}
+          onProfilePress={() => setActiveTab('profile')}
+        />
+
         <View style={styles.screenContainer}>
           {activeTab === 'catalogue' && (
             <BuyerCatalogueScreen
@@ -299,31 +516,106 @@ export const RootNavigator: React.FC = () => {
               user={currentUser}
               onLogout={() => setCurrentUser(null)}
               onResetComplete={() => setActiveTab('catalogue')}
+              onUserUpdated={updated => setCurrentUser(updated)}
             />
           )}
         </View>
 
         {/* Buyer Bottom Tab Bar */}
         <View style={styles.tabBar}>
-          <TouchableOpacity style={styles.tabItem} onPress={() => setActiveTab('catalogue')}>
-            <Ionicons name="search-outline" size={22} color={activeTab === 'catalogue' ? colors.primary : '#94A3B8'} />
-            <Text style={[styles.tabLabel, activeTab === 'catalogue' && styles.tabLabelActive]}>Discover</Text>
+          <TouchableOpacity
+            style={[styles.tabItem, activeTab === 'catalogue' && styles.tabItemActive]}
+            onPress={() => setActiveTab('catalogue')}
+            activeOpacity={0.8}
+            accessibilityRole="tab"
+          >
+            <Ionicons
+              name={activeTab === 'catalogue' ? 'search' : 'search-outline'}
+              size={20}
+              color={activeTab === 'catalogue' ? colors.primary : colors.neutralLight}
+            />
+            <Text
+              style={[styles.tabLabel, activeTab === 'catalogue' && styles.tabLabelActive]}
+              numberOfLines={1}
+            >
+              {t.tabs.catalogue}
+            </Text>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.tabItem} onPress={() => setActiveTab('offers')}>
-            <Ionicons name="git-pull-request-outline" size={22} color={activeTab === 'offers' ? colors.primary : '#94A3B8'} />
-            <Text style={[styles.tabLabel, activeTab === 'offers' && styles.tabLabelActive]}>Offers</Text>
+
+          <TouchableOpacity
+            style={[styles.tabItem, activeTab === 'offers' && styles.tabItemActive]}
+            onPress={() => setActiveTab('offers')}
+            activeOpacity={0.8}
+            accessibilityRole="tab"
+          >
+            <Ionicons
+              name={activeTab === 'offers' ? 'git-pull-request' : 'git-pull-request-outline'}
+              size={20}
+              color={activeTab === 'offers' ? colors.primary : colors.neutralLight}
+            />
+            <Text
+              style={[styles.tabLabel, activeTab === 'offers' && styles.tabLabelActive]}
+              numberOfLines={1}
+            >
+              {t.tabs.offers}
+            </Text>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.tabItem} onPress={() => setActiveTab('orders')}>
-            <Ionicons name="cart-outline" size={22} color={activeTab === 'orders' ? colors.primary : '#94A3B8'} />
-            <Text style={[styles.tabLabel, activeTab === 'orders' && styles.tabLabelActive]}>Orders</Text>
+
+          <TouchableOpacity
+            style={[styles.tabItem, activeTab === 'orders' && styles.tabItemActive]}
+            onPress={() => setActiveTab('orders')}
+            activeOpacity={0.8}
+            accessibilityRole="tab"
+          >
+            <Ionicons
+              name={activeTab === 'orders' ? 'cart' : 'cart-outline'}
+              size={20}
+              color={activeTab === 'orders' ? colors.primary : colors.neutralLight}
+            />
+            <Text
+              style={[styles.tabLabel, activeTab === 'orders' && styles.tabLabelActive]}
+              numberOfLines={1}
+            >
+              {t.tabs.orders}
+            </Text>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.tabItem} onPress={() => setActiveTab('notifications')}>
-            <Ionicons name="notifications-outline" size={22} color={activeTab === 'notifications' ? colors.primary : '#94A3B8'} />
-            <Text style={[styles.tabLabel, activeTab === 'notifications' && styles.tabLabelActive]}>Inbox</Text>
+
+          <TouchableOpacity
+            style={[styles.tabItem, activeTab === 'notifications' && styles.tabItemActive]}
+            onPress={() => setActiveTab('notifications')}
+            activeOpacity={0.8}
+            accessibilityRole="tab"
+          >
+            <Ionicons
+              name={activeTab === 'notifications' ? 'notifications' : 'notifications-outline'}
+              size={20}
+              color={activeTab === 'notifications' ? colors.primary : colors.neutralLight}
+            />
+            <Text
+              style={[styles.tabLabel, activeTab === 'notifications' && styles.tabLabelActive]}
+              numberOfLines={1}
+            >
+              {t.tabs.notifications}
+            </Text>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.tabItem} onPress={() => setActiveTab('profile')}>
-            <Ionicons name="person-outline" size={22} color={activeTab === 'profile' ? colors.primary : '#94A3B8'} />
-            <Text style={[styles.tabLabel, activeTab === 'profile' && styles.tabLabelActive]}>Profile</Text>
+
+          <TouchableOpacity
+            style={[styles.tabItem, activeTab === 'profile' && styles.tabItemActive]}
+            onPress={() => setActiveTab('profile')}
+            activeOpacity={0.8}
+            accessibilityRole="tab"
+          >
+            <Ionicons
+              name={activeTab === 'profile' ? 'person' : 'person-outline'}
+              size={20}
+              color={activeTab === 'profile' ? colors.primary : colors.neutralLight}
+            />
+            <Text
+              style={[styles.tabLabel, activeTab === 'profile' && styles.tabLabelActive]}
+              numberOfLines={1}
+            >
+              {t.tabs.profile}
+            </Text>
           </TouchableOpacity>
         </View>
       </SafeAreaView>
@@ -340,26 +632,34 @@ const styles = StyleSheet.create({
   },
   screenContainer: {
     flex: 1,
+    backgroundColor: colors.background,
   },
   tabBar: {
-    height: 60,
+    height: 64,
     backgroundColor: '#FFFFFF',
     borderTopWidth: 1,
     borderTopColor: colors.border,
     flexDirection: 'row',
     justifyContent: 'space-around',
     alignItems: 'center',
-    paddingBottom: 6,
+    paddingHorizontal: spacing.xs,
+    paddingBottom: 4,
+    ...shadows.subtle,
   },
   tabItem: {
+    flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 4,
-    minWidth: 54,
+    paddingVertical: 6,
+    borderRadius: radii.sm,
+  },
+  tabItemActive: {
+    backgroundColor: colors.surfaceHighlighted,
   },
   tabLabel: {
+    ...typography.caption,
     fontSize: 10,
-    color: '#94A3B8',
+    color: colors.neutralGray,
     fontWeight: '500',
     marginTop: 2,
   },

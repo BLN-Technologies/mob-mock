@@ -9,7 +9,7 @@ import {
   TextInput,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { colors, radii } from '../../theme/tokens';
+import { colors, radii, shadows, typography, spacing } from '../../theme/tokens';
 import { useTranslation } from '../../i18n';
 import { Card } from '../../components/ui/Card';
 import { Button } from '../../components/ui/Button';
@@ -52,19 +52,19 @@ export const BuyerOffersScreen: React.FC<BuyerOffersScreenProps> = ({
 
   const handleAccept = async (offer: Offer) => {
     Alert.alert(
-      'Accept Offer & Reserve Stock',
+      t.buyer.acceptOffer,
       `Accepting this proposal for ${formatQuantity(offer.totalQuantityKg)} will atomically reserve the stock across all constituent lots and generate an official Cargo order (FR-REQ-06). Proceed?`,
       [
         { text: t.common.cancel, style: 'cancel' },
         {
-          text: 'Accept Offer',
+          text: t.common.confirm,
           onPress: async () => {
             setActionLoading(true);
             try {
               await offerService.respondToOffer(offer.id, 'ACCEPT');
               await loadOffers();
               Alert.alert(
-                'Offer Accepted',
+                t.common.appName,
                 'Stock successfully reserved and Order created. Please proceed to Orders to review terms and initiate payment.',
                 [{ text: 'View Orders', onPress: onOfferAccepted }]
               );
@@ -97,7 +97,7 @@ export const BuyerOffersScreen: React.FC<BuyerOffersScreenProps> = ({
       setShowCounterInput(null);
       setCounterPrice('');
       await loadOffers();
-      Alert.alert('Counter Proposal Sent', 'Cargo operations has been notified of your counter proposal.');
+      Alert.alert(t.common.appName, 'Cargo operations has been notified of your counter proposal.');
     } catch (err: any) {
       Alert.alert('Error', err.message);
     } finally {
@@ -109,10 +109,16 @@ export const BuyerOffersScreen: React.FC<BuyerOffersScreenProps> = ({
     <View style={styles.container}>
       <ScrollView
         contentContainerStyle={styles.scrollContent}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[colors.primary]} />}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[colors.primary]} />
+        }
       >
-        <Text style={styles.title}>{t.buyer.offers}</Text>
-        <Text style={styles.subtitle}>Consolidated proposals prepared by Cargo operations matching your requests.</Text>
+        <View style={styles.headerBox}>
+          <Text style={styles.title}>{t.buyer.offers}</Text>
+          <Text style={styles.subtitle}>
+            Consolidated commercial proposals prepared by Cargo operations.
+          </Text>
+        </View>
 
         {offers.length === 0 ? (
           <EmptyState
@@ -122,29 +128,31 @@ export const BuyerOffersScreen: React.FC<BuyerOffersScreenProps> = ({
           />
         ) : (
           offers.map(offer => (
-            <Card key={offer.id}>
+            <Card key={offer.id} style={styles.offerCard}>
               <View style={styles.offerHeader}>
-                <View>
+                <View style={styles.offerMeta}>
                   <Text style={styles.offerCode}>{offer.offerCode}</Text>
                   <Text style={styles.subtext}>
                     {offer.supplierCount} supplier(s) pooled · Delivered to {offer.deliveryDistrict}
                   </Text>
                 </View>
-                <StatusBadge status={offer.status} />
+                <StatusBadge status={offer.status} size="small" />
               </View>
 
               <View style={styles.metricGrid}>
                 <View style={styles.metricItem}>
-                  <Text style={styles.metricLabel}>Total Quantity</Text>
+                  <Text style={styles.metricLabel}>{t.supplier.quantityKg}</Text>
                   <Text style={styles.metricVal}>{formatQuantity(offer.totalQuantityKg)}</Text>
                 </View>
                 <View style={styles.metricItem}>
-                  <Text style={styles.metricLabel}>Price / kg</Text>
+                  <Text style={styles.metricLabel}>{t.supplier.pricePerKg}</Text>
                   <Text style={styles.metricVal}>{formatRwf(offer.averagePricePerKgRwf)}</Text>
                 </View>
                 <View style={styles.metricItem}>
-                  <Text style={styles.metricLabel}>Total Value</Text>
-                  <Text style={[styles.metricVal, { color: colors.primary }]}>{formatRwf(offer.totalPriceRwf)}</Text>
+                  <Text style={styles.metricLabel}>Total Trade Value</Text>
+                  <Text style={[styles.metricVal, { color: colors.primary }]}>
+                    {formatRwf(offer.totalPriceRwf)}
+                  </Text>
                 </View>
               </View>
 
@@ -153,7 +161,9 @@ export const BuyerOffersScreen: React.FC<BuyerOffersScreenProps> = ({
                 <Text style={styles.negotiationTitle}>Negotiation Timeline:</Text>
                 {offer.negotiationTimeline.map(msg => (
                   <View key={msg.id} style={styles.timelineItem}>
-                    <Text style={styles.timelineSender}>{msg.senderName} ({msg.action}):</Text>
+                    <Text style={styles.timelineSender}>
+                      {msg.senderName} ({msg.action}):
+                    </Text>
                     <Text style={styles.timelineNotes}>{msg.notes}</Text>
                   </View>
                 ))}
@@ -171,6 +181,7 @@ export const BuyerOffersScreen: React.FC<BuyerOffersScreenProps> = ({
                         onChangeText={setCounterPrice}
                         keyboardType="numeric"
                         placeholder="e.g. 400"
+                        placeholderTextColor="#94A3B8"
                       />
                       <View style={styles.counterBtnRow}>
                         <Button
@@ -216,119 +227,139 @@ export const BuyerOffersScreen: React.FC<BuyerOffersScreenProps> = ({
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F5F4F6',
+    backgroundColor: colors.background,
   },
   scrollContent: {
-    padding: 16,
-    paddingBottom: 40,
+    padding: spacing.md,
+    paddingBottom: spacing.xxxl + 20,
+  },
+  headerBox: {
+    marginBottom: spacing.md,
   },
   title: {
-    fontSize: 22,
-    fontWeight: '700',
-    color: colors.neutralDark,
+    ...typography.h2,
+    fontSize: 18,
+    color: colors.neutralHeadings,
   },
   subtitle: {
-    fontSize: 13,
+    ...typography.caption,
     color: colors.neutralGray,
-    marginTop: 4,
-    marginBottom: 16,
+    marginTop: 2,
+  },
+  offerCard: {
+    marginBottom: spacing.sm + 2,
   },
   offerHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
-    marginBottom: 12,
+    marginBottom: spacing.sm,
+  },
+  offerMeta: {
+    flex: 1,
+    marginRight: spacing.sm,
   },
   offerCode: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: colors.neutralDark,
+    ...typography.h3,
+    fontSize: 15,
+    color: colors.neutralHeadings,
   },
   subtext: {
-    fontSize: 12,
+    ...typography.caption,
     color: colors.neutralGray,
     marginTop: 2,
   },
   metricGrid: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    backgroundColor: '#F8FAFC',
-    padding: 12,
+    backgroundColor: colors.surfaceSubtle,
+    padding: spacing.sm,
     borderRadius: radii.sm,
-    marginBottom: 12,
+    marginBottom: spacing.sm,
+    borderWidth: 1,
+    borderColor: colors.borderLight,
   },
   metricItem: {
     flex: 1,
   },
   metricLabel: {
-    fontSize: 11,
+    ...typography.caption,
+    fontSize: 10,
     color: colors.neutralGray,
   },
   metricVal: {
-    fontSize: 14,
+    ...typography.bodyMedium,
+    fontSize: 12,
     fontWeight: '700',
-    color: colors.neutralDark,
-    marginTop: 2,
+    color: colors.neutralHeadings,
+    marginTop: 1,
   },
   negotiationBox: {
-    backgroundColor: '#FFF',
+    backgroundColor: '#FFFFFF',
     borderTopWidth: 1,
-    borderTopColor: colors.border,
-    paddingTop: 10,
-    marginBottom: 12,
+    borderTopColor: colors.borderLight,
+    paddingTop: spacing.xs + 2,
+    marginBottom: spacing.xs,
   },
   negotiationTitle: {
-    fontSize: 12,
+    ...typography.caption,
     fontWeight: '700',
-    color: colors.neutralDark,
-    marginBottom: 6,
+    color: colors.neutralHeadings,
+    marginBottom: 4,
+    textTransform: 'uppercase',
   },
   timelineItem: {
-    marginBottom: 6,
+    marginBottom: 4,
   },
   timelineSender: {
-    fontSize: 12,
-    fontWeight: '600',
+    ...typography.caption,
+    fontSize: 11,
+    fontWeight: '700',
     color: colors.primary,
   },
   timelineNotes: {
-    fontSize: 12,
+    ...typography.caption,
+    fontSize: 11,
     color: colors.neutralDark,
-    lineHeight: 16,
+    lineHeight: 15,
   },
   actionSection: {
-    marginTop: 8,
+    marginTop: spacing.xs,
   },
   buttonRow: {
     flexDirection: 'row',
-    gap: 12,
+    gap: spacing.sm,
   },
   btnHalf: {
     flex: 1,
   },
   counterBox: {
-    backgroundColor: '#F1F5F9',
-    padding: 12,
+    backgroundColor: colors.surfaceSubtle,
+    padding: spacing.md,
     borderRadius: radii.md,
+    borderWidth: 1,
+    borderColor: colors.border,
   },
   counterLabel: {
+    ...typography.caption,
     fontSize: 12,
     fontWeight: '600',
-    color: colors.neutralDark,
-    marginBottom: 6,
+    color: colors.neutralHeadings,
+    marginBottom: spacing.xs,
   },
   counterInput: {
-    backgroundColor: '#FFF',
-    borderWidth: 1,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1.5,
     borderColor: colors.border,
     borderRadius: radii.sm,
     height: 44,
-    paddingHorizontal: 10,
+    paddingHorizontal: spacing.sm,
     fontSize: 14,
-    marginBottom: 10,
+    marginBottom: spacing.sm,
+    color: colors.neutralDark,
   },
   counterBtnRow: {
     flexDirection: 'row',
-    gap: 8,
+    gap: spacing.sm,
   },
 });

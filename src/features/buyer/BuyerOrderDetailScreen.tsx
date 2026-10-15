@@ -9,16 +9,17 @@ import {
   TouchableOpacity,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { colors, radii } from '../../theme/tokens';
+import { colors, radii, shadows, typography, spacing } from '../../theme/tokens';
 import { useTranslation } from '../../i18n';
 import { Card } from '../../components/ui/Card';
 import { Button } from '../../components/ui/Button';
 import { StatusBadge } from '../../components/ui/StatusBadge';
+import { CropBadge } from '../../components/ui/CropBadge';
 import { orderService } from '../../services/mock/mockServices';
 import { formatRwf, formatQuantity } from '../../domain/calculations/lotCalculations';
 import { projectAllocationsForBuyer } from '../../domain/projections/buyerProjections';
 import { Order, User } from '../../domain/models';
-import { PaymentMethod, QualityGrade } from '../../domain/enums';
+import { PaymentMethod } from '../../domain/enums';
 
 interface BuyerOrderDetailScreenProps {
   order: Order;
@@ -43,7 +44,7 @@ export const BuyerOrderDetailScreen: React.FC<BuyerOrderDetailScreenProps> = ({
 
   const handleSimulatePayment = async () => {
     Alert.alert(
-      'Simulate Demo Payment',
+      t.buyer.payOrder,
       `Simulate payment of ${formatRwf(order.totalAmountRwf)} via licensed payment partner (MTN MoMo or Bank Transfer). In mock mode, no real funds are moved (BR-03, FR-PAY-01).`,
       [
         { text: t.common.cancel, style: 'cancel' },
@@ -54,7 +55,10 @@ export const BuyerOrderDetailScreen: React.FC<BuyerOrderDetailScreenProps> = ({
             try {
               await orderService.simulatePayment(order.id, PaymentMethod.MOBILE_MONEY);
               onRefreshNeeded();
-              Alert.alert('Payment Confirmed', 'Payment verified by payment partner adapter. Order has moved to Paid and is authorized for dispatch (BR-03).');
+              Alert.alert(
+                t.buyer.paymentSuccess,
+                'Payment verified by payment partner adapter. Order has moved to Paid and is authorized for dispatch (BR-03).'
+              );
             } catch (err: any) {
               Alert.alert('Payment Error', err.message);
             } finally {
@@ -94,18 +98,21 @@ export const BuyerOrderDetailScreen: React.FC<BuyerOrderDetailScreenProps> = ({
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.scrollContent}>
-      <TouchableOpacity onPress={onBack} style={styles.backButton}>
-        <Ionicons name="arrow-back" size={20} color={colors.primary} />
+      <TouchableOpacity onPress={onBack} style={styles.backButton} activeOpacity={0.7}>
+        <Ionicons name="arrow-back" size={18} color={colors.primary} />
         <Text style={styles.backButtonText}>Back to Orders</Text>
       </TouchableOpacity>
 
-      <Card>
+      <Card style={styles.mainCard}>
         <View style={styles.orderHeader}>
-          <View>
+          <CropBadge cropName={order.cropName} size="small" />
+          <View style={styles.orderHeaderMeta}>
             <Text style={styles.orderNumber}>{order.orderNumber}</Text>
-            <Text style={styles.cropGrade}>{order.cropName} · {order.grade}</Text>
+            <Text style={styles.cropGrade}>
+              {order.cropName} · {order.grade}
+            </Text>
           </View>
-          <StatusBadge status={order.status} />
+          <StatusBadge status={order.status} size="small" />
         </View>
 
         {/* Financial Breakdown */}
@@ -115,11 +122,11 @@ export const BuyerOrderDetailScreen: React.FC<BuyerOrderDetailScreenProps> = ({
             <Text style={styles.breakdownVal}>{formatRwf(order.subtotalRwf)}</Text>
           </View>
           <View style={styles.breakdownRow}>
-            <Text style={styles.breakdownLabel}>Platform Fee (5%)</Text>
+            <Text style={styles.breakdownLabel}>Cargo Platform Fee (5%)</Text>
             <Text style={styles.breakdownVal}>{formatRwf(order.buyerFeeRwf)}</Text>
           </View>
           <View style={[styles.breakdownRow, styles.totalRow]}>
-            <Text style={styles.totalLabel}>Total Agreed Value</Text>
+            <Text style={styles.totalLabel}>Total Escrow Value</Text>
             <Text style={styles.totalVal}>{formatRwf(order.totalAmountRwf)}</Text>
           </View>
         </View>
@@ -127,22 +134,37 @@ export const BuyerOrderDetailScreen: React.FC<BuyerOrderDetailScreenProps> = ({
         {/* Delivery Terms */}
         <View style={styles.infoSection}>
           <Text style={styles.sectionHeader}>Delivery Information:</Text>
-          <Text style={styles.infoText}>📍 {order.deliveryAddress}, {order.deliveryDistrict}</Text>
-          <Text style={styles.infoText}>📅 Target Date: {order.agreedDeliveryDate}</Text>
-          {order.paymentReference ? (
-            <Text style={[styles.infoText, { color: colors.primary, fontWeight: '600', marginTop: 4 }]}>
-              💳 Payment Ref: {order.paymentReference}
+          <View style={styles.infoRow}>
+            <Ionicons name="location-outline" size={14} color={colors.primary} />
+            <Text style={styles.infoText}>
+              {order.deliveryAddress}, {order.deliveryDistrict}
             </Text>
+          </View>
+          <View style={styles.infoRow}>
+            <Ionicons name="calendar-outline" size={14} color={colors.primary} />
+            <Text style={styles.infoText}>Target Delivery: {order.agreedDeliveryDate}</Text>
+          </View>
+          {order.paymentReference ? (
+            <View style={styles.infoRow}>
+              <Ionicons name="card-outline" size={14} color={colors.primary} />
+              <Text style={styles.paymentRefText}>
+                Escrow Ref: {order.paymentReference}
+              </Text>
+            </View>
           ) : null}
         </View>
 
         {/* Allocations (Privacy protected: no supplier personal contacts!) */}
         <View style={styles.allocationsSection}>
-          <Text style={styles.sectionHeader}>Allocated Batches ({buyerAllocations.length}):</Text>
+          <Text style={styles.sectionHeader}>
+            Pooled Supply Batches ({buyerAllocations.length}):
+          </Text>
           {buyerAllocations.map((alloc, idx) => (
             <View key={idx} style={styles.allocRow}>
               <Text style={styles.allocCode}>{alloc.lotCode}</Text>
-              <Text style={styles.allocQty}>{formatQuantity(alloc.quantityKg)} @ {formatRwf(alloc.pricePerKgRwf)}/kg</Text>
+              <Text style={styles.allocQty}>
+                {formatQuantity(alloc.quantityKg)} @ {formatRwf(alloc.pricePerKgRwf)}/kg
+              </Text>
             </View>
           ))}
         </View>
@@ -153,7 +175,9 @@ export const BuyerOrderDetailScreen: React.FC<BuyerOrderDetailScreenProps> = ({
             title={t.buyer.payOrder}
             onPress={handleSimulatePayment}
             loading={loading}
-            icon={<Ionicons name="card-outline" size={18} color="#FFF" />}
+            icon={<Ionicons name="card" size={18} color="#FFFFFF" />}
+            size="large"
+            fullWidth
             style={styles.actionBtn}
           />
         ) : null}
@@ -162,15 +186,17 @@ export const BuyerOrderDetailScreen: React.FC<BuyerOrderDetailScreenProps> = ({
           <Button
             title={t.buyer.confirmReceipt}
             onPress={() => setShowDeliveryModal(true)}
-            icon={<Ionicons name="checkmark-done-circle-outline" size={20} color="#FFF" />}
+            icon={<Ionicons name="checkmark-done-circle" size={18} color="#FFFFFF" />}
+            size="large"
+            fullWidth
             style={styles.actionBtn}
           />
         ) : null}
 
         {order.status === 'ACCEPTED' || order.status === 'SETTLED' ? (
           <View style={styles.completedNotice}>
-            <Ionicons name="checkmark-circle" size={20} color={colors.primary} />
-            <Text style={styles.completedText}>Trade Completed & Settled</Text>
+            <Ionicons name="checkmark-circle" size={18} color={colors.successDark} />
+            <Text style={styles.completedText}>Trade Fulfilled & Fully Settled</Text>
           </View>
         ) : null}
       </Card>
@@ -180,7 +206,7 @@ export const BuyerOrderDetailScreen: React.FC<BuyerOrderDetailScreenProps> = ({
         <Card style={styles.receiptCard}>
           <Text style={styles.receiptTitle}>Record Delivery Receipt (FR-DEL-03)</Text>
           <Text style={styles.receiptSubtitle}>
-            Inspect the delivered produce and record the received quantity. If there is a discrepancy, you can accept with adjustment or open a dispute.
+            Inspect delivered goods at warehouse. Enter received quantity. If quality discrepancy exists, trigger quality dispute.
           </Text>
 
           <Text style={styles.inputLabel}>Received Quantity (kg):</Text>
@@ -189,33 +215,38 @@ export const BuyerOrderDetailScreen: React.FC<BuyerOrderDetailScreenProps> = ({
             value={receivedKg}
             onChangeText={setReceivedKg}
             keyboardType="numeric"
+            placeholderTextColor="#94A3B8"
           />
 
-          <Text style={styles.inputLabel}>Receipt / Inspection Notes:</Text>
+          <Text style={styles.inputLabel}>Warehouse Receipt Notes:</Text>
           <TextInput
             style={styles.receiptInput}
             value={notes}
             onChangeText={setNotes}
-            placeholder="e.g. Moisture verified, 2 bags had torn packaging"
+            placeholder="e.g. Moisture verified, packaging intact"
+            placeholderTextColor="#94A3B8"
           />
 
           <View style={styles.receiptButtons}>
             <Button
-              title="Accept Full"
+              title="Accept Full Delivery"
               onPress={() => handleConfirmDelivery('ACCEPT_FULL')}
               loading={loading}
-              style={{ marginBottom: 8 }}
+              fullWidth
+              style={{ marginBottom: spacing.sm }}
             />
             <Button
-              title="Open Quality Dispute"
+              title="Open Quality Dispute (Pause Settlement)"
               onPress={() => handleConfirmDelivery('DISPUTED')}
               variant="danger"
-              style={{ marginBottom: 8 }}
+              fullWidth
+              style={{ marginBottom: spacing.sm }}
             />
             <Button
               title={t.common.cancel}
               onPress={() => setShowDeliveryModal(false)}
               variant="secondary"
+              fullWidth
             />
           </View>
         </Card>
@@ -227,44 +258,54 @@ export const BuyerOrderDetailScreen: React.FC<BuyerOrderDetailScreenProps> = ({
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F5F4F6',
+    backgroundColor: colors.background,
   },
   scrollContent: {
-    padding: 16,
-    paddingBottom: 40,
+    padding: spacing.md,
+    paddingBottom: spacing.xxxl + 20,
   },
   backButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 12,
-    gap: 6,
+    marginBottom: spacing.sm,
+    gap: 4,
+    paddingVertical: spacing.xs,
   },
   backButtonText: {
-    fontSize: 14,
+    ...typography.caption,
+    fontSize: 13,
     color: colors.primary,
-    fontWeight: '600',
+    fontWeight: '700',
+  },
+  mainCard: {
+    padding: spacing.lg,
   },
   orderHeader: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginBottom: 16,
+    alignItems: 'center',
+    marginBottom: spacing.md,
+  },
+  orderHeaderMeta: {
+    flex: 1,
+    marginLeft: spacing.sm,
+    marginRight: spacing.xs,
   },
   orderNumber: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: colors.neutralDark,
+    ...typography.h2,
+    fontSize: 18,
+    color: colors.neutralHeadings,
   },
   cropGrade: {
-    fontSize: 13,
+    ...typography.caption,
     color: colors.neutralGray,
-    marginTop: 2,
   },
   breakdownBox: {
-    backgroundColor: '#F8FAFC',
-    padding: 12,
-    borderRadius: radii.sm,
-    marginBottom: 16,
+    backgroundColor: colors.surfaceSubtle,
+    padding: spacing.md,
+    borderRadius: radii.md,
+    marginBottom: spacing.md,
+    borderWidth: 1,
+    borderColor: colors.borderLight,
   },
   breakdownRow: {
     flexDirection: 'row',
@@ -272,117 +313,140 @@ const styles = StyleSheet.create({
     marginBottom: 6,
   },
   breakdownLabel: {
-    fontSize: 13,
+    ...typography.caption,
     color: colors.neutralGray,
   },
   breakdownVal: {
-    fontSize: 13,
-    fontWeight: '600',
+    ...typography.caption,
+    fontWeight: '700',
     color: colors.neutralDark,
   },
   totalRow: {
     borderTopWidth: 1,
     borderTopColor: colors.border,
-    paddingTop: 8,
-    marginTop: 4,
+    paddingTop: spacing.xs + 2,
+    marginTop: spacing.xs,
     marginBottom: 0,
   },
   totalLabel: {
-    fontSize: 15,
+    ...typography.bodyMedium,
+    fontSize: 13,
     fontWeight: '700',
-    color: colors.neutralDark,
+    color: colors.neutralHeadings,
   },
   totalVal: {
+    ...typography.bodyMedium,
     fontSize: 16,
-    fontWeight: '700',
+    fontWeight: '800',
     color: colors.primary,
   },
   infoSection: {
-    marginBottom: 16,
-    paddingBottom: 12,
+    marginBottom: spacing.md,
+    paddingBottom: spacing.md,
     borderBottomWidth: 1,
-    borderBottomColor: colors.border,
+    borderBottomColor: colors.borderLight,
   },
   sectionHeader: {
-    fontSize: 13,
+    ...typography.caption,
     fontWeight: '700',
-    color: colors.neutralDark,
-    marginBottom: 6,
+    color: colors.neutralHeadings,
+    marginBottom: spacing.xs,
+    textTransform: 'uppercase',
+  },
+  infoRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 4,
   },
   infoText: {
-    fontSize: 13,
+    ...typography.caption,
+    fontSize: 12,
     color: colors.neutralDark,
-    marginBottom: 3,
+  },
+  paymentRefText: {
+    ...typography.caption,
+    fontSize: 12,
+    fontWeight: '700',
+    color: colors.primary,
   },
   allocationsSection: {
-    marginBottom: 20,
+    marginBottom: spacing.lg,
   },
   allocRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    paddingVertical: 4,
+    paddingVertical: 3,
   },
   allocCode: {
+    ...typography.caption,
     fontSize: 12,
-    fontWeight: '600',
+    fontWeight: '700',
     color: colors.primary,
   },
   allocQty: {
+    ...typography.caption,
     fontSize: 12,
     color: colors.neutralDark,
   },
   actionBtn: {
-    marginTop: 8,
+    marginTop: spacing.xs,
   },
   completedNotice: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#DCFCE7',
-    padding: 12,
+    backgroundColor: colors.surfaceHighlighted,
+    padding: spacing.md,
     borderRadius: radii.md,
+    borderWidth: 1,
+    borderColor: colors.successBorder,
     gap: 8,
-    marginTop: 8,
+    marginTop: spacing.xs,
   },
   completedText: {
-    fontSize: 14,
+    ...typography.bodyMedium,
+    fontSize: 13,
     fontWeight: '700',
-    color: colors.primary,
+    color: colors.successDark,
   },
   receiptCard: {
-    marginTop: 16,
-    borderWidth: 2,
+    marginTop: spacing.md,
+    borderWidth: 1.5,
     borderColor: colors.primary,
+    padding: spacing.lg,
   },
   receiptTitle: {
+    ...typography.h3,
     fontSize: 16,
-    fontWeight: '700',
-    color: colors.neutralDark,
-    marginBottom: 4,
+    color: colors.neutralHeadings,
+    marginBottom: 2,
   },
   receiptSubtitle: {
-    fontSize: 12,
+    ...typography.caption,
     color: colors.neutralGray,
-    marginBottom: 14,
+    marginBottom: spacing.md,
     lineHeight: 16,
   },
   inputLabel: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: colors.neutralDark,
-    marginBottom: 4,
+    ...typography.caption,
+    fontSize: 12,
+    fontWeight: '700',
+    color: colors.neutralHeadings,
+    marginBottom: spacing.xs,
   },
   receiptInput: {
-    backgroundColor: '#F8FAFC',
-    borderWidth: 1,
+    backgroundColor: colors.surfaceSubtle,
+    borderWidth: 1.5,
     borderColor: colors.border,
-    borderRadius: radii.sm,
-    height: 44,
-    paddingHorizontal: 12,
-    fontSize: 14,
-    marginBottom: 12,
+    borderRadius: radii.md,
+    height: 46,
+    paddingHorizontal: spacing.md,
+    fontSize: 13,
+    marginBottom: spacing.md,
+    color: colors.neutralDark,
   },
   receiptButtons: {
-    marginTop: 6,
+    marginTop: spacing.xs,
   },
 });

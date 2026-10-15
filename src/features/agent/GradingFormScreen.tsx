@@ -7,14 +7,16 @@ import {
   Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { colors, radii } from '../../theme/tokens';
+import { colors, radii, typography, spacing } from '../../theme/tokens';
 import { useTranslation } from '../../i18n';
 import { Button } from '../../components/ui/Button';
 import { FormField } from '../../components/forms/FormField';
 import { StatusBadge } from '../../components/ui/StatusBadge';
+import { CropBadge } from '../../components/ui/CropBadge';
 import { gradingService, mockState } from '../../services/mock/mockServices';
 import { Lot, User, Organization } from '../../domain/models';
 import { QualityGrade } from '../../domain/enums';
+import { formatQuantity } from '../../domain/calculations/lotCalculations';
 
 interface GradingFormScreenProps {
   lot: Lot;
@@ -36,7 +38,7 @@ export const GradingFormScreen: React.FC<GradingFormScreenProps> = ({
   const [foreignMatter, setForeignMatter] = useState('0.8');
   const [defects, setDefects] = useState('1.5');
   const [notes, setNotes] = useState('Sample taken from 5 bags randomly. Grain clean and dry.');
-  const [gps, setGps] = useState<{ lat: number; lng: number } | undefined>({
+  const [gps] = useState<{ lat: number; lng: number } | undefined>({
     lat: -1.5973,
     lng: 30.4082,
   });
@@ -76,7 +78,7 @@ export const GradingFormScreen: React.FC<GradingFormScreenProps> = ({
         isOffline
           ? 'You are currently offline. Your grading record was safely saved to the local offline queue and will sync automatically when connectivity returns (FR-QA-03).'
           : `Grading recorded successfully as ${calculatedGrade}. The lot is now verified and visible on the Cargo marketplace.`,
-        [{ text: 'OK', onPress: onSuccess }]
+        [{ text: t.common.done, onPress: onSuccess }]
       );
     } catch (err: any) {
       Alert.alert('Grading Error', err.message);
@@ -89,9 +91,18 @@ export const GradingFormScreen: React.FC<GradingFormScreenProps> = ({
     <ScrollView style={styles.container} contentContainerStyle={styles.scrollContent}>
       {/* Header Info */}
       <View style={styles.lotSummaryBox}>
-        <Text style={styles.lotCrop}>{lot.cropName} Inspection</Text>
-        <Text style={styles.lotCode}>{lot.lotCode} · {lot.totalQuantityKg.toLocaleString()} kg</Text>
-        <Text style={styles.coopText}>{org?.name || 'Cooperative'} · {lot.pickupDistrict}</Text>
+        <View style={styles.summaryTopRow}>
+          <CropBadge cropName={lot.cropName} size="small" />
+          <View style={styles.summaryTitleWrap}>
+            <Text style={styles.lotCrop}>{lot.cropName} Inspection</Text>
+            <Text style={styles.lotCode}>
+              {lot.lotCode} · {formatQuantity(lot.totalQuantityKg)}
+            </Text>
+          </View>
+        </View>
+        <Text style={styles.coopText}>
+          {org?.name || 'Cooperative'} · {lot.pickupDistrict}
+        </Text>
       </View>
 
       {/* Calculated Grade Display */}
@@ -100,14 +111,16 @@ export const GradingFormScreen: React.FC<GradingFormScreenProps> = ({
         <StatusBadge status={calculatedGrade} />
       </View>
 
-      {/* Measurements */}
+      {/* Measurements with suffix */}
       <Text style={styles.sectionTitle}>{t.agent.enterMeasurements}</Text>
+
       <FormField
         label={t.agent.moisture}
         value={moisture}
         onChangeText={setMoisture}
         keyboardType="numeric"
         placeholder="13.2"
+        suffix="%"
         helper="Grade A threshold: <= 13.5%"
       />
 
@@ -117,6 +130,7 @@ export const GradingFormScreen: React.FC<GradingFormScreenProps> = ({
         onChangeText={setForeignMatter}
         keyboardType="numeric"
         placeholder="0.8"
+        suffix="%"
         helper="Grade A threshold: <= 1.0%"
       />
 
@@ -126,6 +140,7 @@ export const GradingFormScreen: React.FC<GradingFormScreenProps> = ({
         onChangeText={setDefects}
         keyboardType="numeric"
         placeholder="1.5"
+        suffix="%"
         helper="Grade A threshold: <= 2.0%"
       />
 
@@ -141,14 +156,14 @@ export const GradingFormScreen: React.FC<GradingFormScreenProps> = ({
       </View>
 
       <FormField
-        label="Inspection Notes"
+        label="Inspection Field Notes"
         value={notes}
         onChangeText={setNotes}
         multiline
         numberOfLines={3}
       />
 
-      {/* Immutability Alert */}
+      {/* Immutability Notice */}
       <View style={styles.immutableNotice}>
         <Ionicons name="information-circle" size={18} color="#0369A1" />
         <Text style={styles.immutableNoticeText}>
@@ -177,99 +192,114 @@ export const GradingFormScreen: React.FC<GradingFormScreenProps> = ({
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F5F4F6',
+    backgroundColor: colors.background,
   },
   scrollContent: {
-    padding: 16,
-    paddingBottom: 40,
+    padding: spacing.md,
+    paddingBottom: spacing.xxxl + 20,
   },
   lotSummaryBox: {
-    backgroundColor: colors.surface,
-    padding: 16,
+    backgroundColor: '#FFFFFF',
+    padding: spacing.md,
     borderRadius: radii.md,
     borderWidth: 1,
     borderColor: colors.border,
-    marginBottom: 16,
+    marginBottom: spacing.md,
+  },
+  summaryTopRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  summaryTitleWrap: {
+    marginLeft: spacing.sm,
+    flex: 1,
   },
   lotCrop: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: colors.neutralDark,
+    ...typography.h3,
+    fontSize: 16,
+    color: colors.neutralHeadings,
   },
   lotCode: {
-    fontSize: 13,
+    ...typography.caption,
     color: colors.neutralGray,
-    marginTop: 2,
   },
   coopText: {
-    fontSize: 13,
+    ...typography.caption,
+    fontSize: 12,
     fontWeight: '600',
     color: colors.primary,
-    marginTop: 6,
+    marginTop: spacing.xs,
   },
   gradeBox: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    backgroundColor: '#FFF',
-    padding: 14,
+    backgroundColor: '#FFFFFF',
+    padding: spacing.md,
     borderRadius: radii.md,
     borderWidth: 1,
     borderColor: colors.border,
-    marginBottom: 20,
+    marginBottom: spacing.md,
   },
   gradeBoxTitle: {
-    fontSize: 15,
+    ...typography.bodyMedium,
+    fontSize: 14,
     fontWeight: '700',
-    color: colors.neutralDark,
+    color: colors.neutralHeadings,
   },
   sectionTitle: {
-    fontSize: 16,
+    ...typography.caption,
+    fontSize: 12,
     fontWeight: '700',
-    color: colors.neutralDark,
-    marginBottom: 12,
+    color: colors.neutralGray,
+    textTransform: 'uppercase',
+    marginBottom: spacing.sm,
   },
   gpsCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#F0FDF4',
+    backgroundColor: colors.surfaceHighlighted,
     borderWidth: 1,
-    borderColor: '#BBF7D0',
-    padding: 12,
+    borderColor: colors.successBorder,
+    padding: spacing.sm + 2,
     borderRadius: radii.md,
-    marginBottom: 16,
+    marginBottom: spacing.md,
   },
   gpsTextWrap: {
-    marginLeft: 10,
+    marginLeft: spacing.sm,
   },
   gpsTitle: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#166534',
+    ...typography.caption,
+    fontSize: 11,
+    fontWeight: '700',
+    color: colors.successDark,
   },
   gpsCoords: {
-    fontSize: 12,
-    color: '#15803D',
-    marginTop: 2,
+    ...typography.caption,
+    fontSize: 11,
+    color: colors.success,
+    marginTop: 1,
   },
   immutableNotice: {
     flexDirection: 'row',
     alignItems: 'flex-start',
     backgroundColor: '#E0F2FE',
-    padding: 12,
+    padding: spacing.sm + 2,
     borderRadius: radii.md,
-    marginBottom: 20,
-    gap: 8,
+    marginBottom: spacing.md,
+    gap: spacing.xs,
   },
   immutableNoticeText: {
-    fontSize: 12,
+    ...typography.caption,
+    fontSize: 11,
     color: '#0369A1',
     flex: 1,
     lineHeight: 16,
   },
   buttonRow: {
     flexDirection: 'row',
-    gap: 12,
+    gap: spacing.sm,
+    marginTop: spacing.xs,
   },
   btnHalf: {
     flex: 1,

@@ -6,8 +6,7 @@ import {
   ScrollView,
   Alert,
 } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
-import { colors, radii } from '../../theme/tokens';
+import { colors, radii, typography, spacing } from '../../theme/tokens';
 import { useTranslation } from '../../i18n';
 import { Button } from '../../components/ui/Button';
 import { FormField } from '../../components/forms/FormField';
@@ -41,16 +40,20 @@ export const CreateRequestScreen: React.FC<CreateRequestScreenProps> = ({
     await new Promise(r => setTimeout(r, 600)); // simulate submission
     setLoading(false);
     Alert.alert(
-      'Sourcing Request Posted',
+      t.common.appName,
       'Your request for 20,000 kg Maize has been submitted to Cargo operations. Cargo will coordinate verified supply and pool offers for you (FR-REQ-02, FR-REQ-03).',
-      [{ text: 'OK', onPress: onSuccess }]
+      [{ text: t.common.done, onPress: onSuccess }]
     );
   };
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.scrollContent}>
-      <Text style={styles.title}>{t.buyer.postRequest}</Text>
-      <Text style={styles.subtitle}>Specify produce requirements for Cargo operations to pool from verified cooperatives.</Text>
+      <View style={styles.headerBox}>
+        <Text style={styles.title}>{t.buyer.postRequest}</Text>
+        <Text style={styles.subtitle}>
+          Specify produce requirements for Cargo operations to pool from verified cooperatives.
+        </Text>
+      </View>
 
       <FormField
         label={t.supplier.cropType}
@@ -67,7 +70,7 @@ export const CreateRequestScreen: React.FC<CreateRequestScreenProps> = ({
       />
 
       <FormField
-        label="Minimum Acceptable Grade"
+        label="Minimum Acceptable Quality Grade"
         value={minGrade}
         onChangeText={setMinGrade}
         placeholder="Grade A, Grade B"
@@ -79,6 +82,7 @@ export const CreateRequestScreen: React.FC<CreateRequestScreenProps> = ({
         onChangeText={setQuantityKg}
         keyboardType="numeric"
         placeholder="20000"
+        suffix="kg"
         helper="Minimum institutional bulk order is 1,000 kg"
       />
 
@@ -88,6 +92,8 @@ export const CreateRequestScreen: React.FC<CreateRequestScreenProps> = ({
         onChangeText={setTargetPriceRwf}
         keyboardType="numeric"
         placeholder="410"
+        prefix="RWF"
+        suffix="/ kg"
       />
 
       <FormField
@@ -95,6 +101,7 @@ export const CreateRequestScreen: React.FC<CreateRequestScreenProps> = ({
         value={deliveryDistrict}
         onChangeText={setDeliveryDistrict}
         placeholder="e.g. Kigali (Gasabo)"
+        prefix="📍"
       />
 
       <FormField
@@ -102,6 +109,7 @@ export const CreateRequestScreen: React.FC<CreateRequestScreenProps> = ({
         value={deliverySector}
         onChangeText={setDeliverySector}
         placeholder="e.g. Gisozi"
+        prefix="📍"
       />
 
       <FormField
@@ -109,10 +117,11 @@ export const CreateRequestScreen: React.FC<CreateRequestScreenProps> = ({
         value={requiredDate}
         onChangeText={setRequiredDate}
         placeholder="YYYY-MM-DD"
+        prefix="📅"
       />
 
       <FormField
-        label="Procurement Notes"
+        label="Procurement Field Notes"
         value={notes}
         onChangeText={setNotes}
         multiline
@@ -127,7 +136,7 @@ export const CreateRequestScreen: React.FC<CreateRequestScreenProps> = ({
           style={styles.btnHalf}
         />
         <Button
-          title="Submit Request"
+          title="Submit Sourcing Request"
           onPress={handleSubmit}
           loading={loading}
           style={styles.btnHalf}
@@ -140,27 +149,29 @@ export const CreateRequestScreen: React.FC<CreateRequestScreenProps> = ({
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F5F4F6',
+    backgroundColor: colors.background,
   },
   scrollContent: {
-    padding: 16,
-    paddingBottom: 40,
+    padding: spacing.md,
+    paddingBottom: spacing.xxxl + 20,
+  },
+  headerBox: {
+    marginBottom: spacing.md,
   },
   title: {
-    fontSize: 22,
-    fontWeight: '700',
-    color: colors.neutralDark,
+    ...typography.h2,
+    fontSize: 18,
+    color: colors.neutralHeadings,
   },
   subtitle: {
-    fontSize: 13,
+    ...typography.caption,
     color: colors.neutralGray,
-    marginTop: 4,
-    marginBottom: 16,
+    marginTop: 2,
   },
   buttonRow: {
     flexDirection: 'row',
-    gap: 12,
-    marginTop: 12,
+    gap: spacing.sm,
+    marginTop: spacing.md,
   },
   btnHalf: {
     flex: 1,
