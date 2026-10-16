@@ -12,6 +12,7 @@ import { colors, radii, shadows, typography, spacing } from '../../theme/tokens'
 import { useTranslation } from '../../i18n';
 import { Button } from '../../components/ui/Button';
 import { User, Organization } from '../../domain/models';
+import { VerificationStatus } from '../../domain/enums';
 
 interface SupplierOnboardingScreenProps {
   user: User;
@@ -51,10 +52,21 @@ export const SupplierOnboardingScreen: React.FC<SupplierOnboardingScreenProps> =
                   {organization?.name || 'Registered Cooperative'}
                 </Text>
               </View>
-              <View style={styles.statusPill}>
-                <View style={styles.statusDot} />
-                <Text style={styles.statusText}>
-                  {language === 'rw' ? 'Biracyasuzumwa' : 'Verification Pending'}
+              <View style={[
+                styles.statusPill,
+                organization?.verificationStatus === VerificationStatus.VERIFIED && { backgroundColor: '#DCFCE7' },
+              ]}>
+                <View style={[
+                  styles.statusDot,
+                  organization?.verificationStatus === VerificationStatus.VERIFIED && { backgroundColor: colors.successDark },
+                ]} />
+                <Text style={[
+                  styles.statusText,
+                  organization?.verificationStatus === VerificationStatus.VERIFIED && { color: colors.successDark },
+                ]}>
+                  {organization?.verificationStatus === VerificationStatus.VERIFIED
+                    ? (language === 'rw' ? 'Koperative Yemejwe' : 'Accredited Cooperative')
+                    : (language === 'rw' ? 'Biracyasuzumwa' : 'Accreditation Pending')}
                 </Text>
               </View>
             </View>
@@ -90,12 +102,25 @@ export const SupplierOnboardingScreen: React.FC<SupplierOnboardingScreenProps> =
 
             {/* Step 2 */}
             <View style={styles.stepRow}>
-              <View style={[styles.stepIconWrap, { backgroundColor: '#FEF3C7' }]}>
-                <Ionicons name="hourglass-outline" size={18} color={colors.warningDark} />
+              <View style={[
+                styles.stepIconWrap,
+                { backgroundColor: organization?.verificationStatus === VerificationStatus.VERIFIED ? '#DCFCE7' : '#FEF3C7' },
+              ]}>
+                <Ionicons
+                  name={organization?.verificationStatus === VerificationStatus.VERIFIED ? 'checkmark-done' : 'hourglass-outline'}
+                  size={18}
+                  color={organization?.verificationStatus === VerificationStatus.VERIFIED ? colors.primary : colors.warningDark}
+                />
               </View>
               <View style={styles.stepContent}>
                 <Text style={styles.stepHeading}>{t.auth.supplierStep2Title}</Text>
-                <Text style={styles.stepBody}>{t.auth.supplierStep2Desc}</Text>
+                <Text style={styles.stepBody}>
+                  {organization?.verificationStatus === VerificationStatus.VERIFIED
+                    ? (language === 'rw'
+                        ? 'Koperative yawe yemejwe n’ubuyobozi bwa Cargo. Ushobora kumenyekanisha umusaruro.'
+                        : 'Cooperative accreditation approved by Cargo Operations. You are authorized to declare harvest lots.')
+                    : t.auth.supplierStep2Desc}
+                </Text>
               </View>
             </View>
 

@@ -38,6 +38,17 @@ import { isLotBuyerVisible, validateLotTransition } from '../../domain/workflows
 import { validateOrderTransition } from '../../domain/workflows/orderWorkflow';
 import { projectLotForBuyer } from '../../domain/projections/buyerProjections';
 import { localStorage } from '../../data/local/storage';
+import {
+  IAuthService,
+  SupplierRegistrationInput,
+  BuyerRegistrationInput,
+  AgentInviteRegistrationInput,
+  LoginInput,
+  AuthResult,
+  SessionValidationResult,
+  AccountOnboardingStatus,
+  ProfileUpdateInput,
+} from '../auth/authInterface';
 
 // In-Memory state initialized from Seed or LocalStorage
 let usersState: User[] = [...SEED_USERS];
@@ -115,12 +126,44 @@ export const mockState = {
   },
 };
 
+// Phone and Email Normalization Helpers
+export function normalizeRwandanPhone(phone: string): string {
+  const clean = phone.trim().replace(/\s+/g, '');
+  if (clean.startsWith('07')) {
+    return `+250${clean.substring(1)}`;
+  } else if (clean.startsWith('7') && clean.length === 9) {
+    return `+250${clean}`;
+  }
+  return clean;
+}
+
+export function isValidEmail(email: string): boolean {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
+}
+
 // 1. Authentication Service
-export const authService = {
-  async login(phoneOrEmail: string, password?: string): Promise<{ user: User; requiresOtp: boolean }> {
-    const clean = phoneOrEmail.trim().toLowerCase();
+export const authService: IAuthService & {
+  register: (input: {
+    fullName: string;
+    phone: string;
+    email?: string;
+    password?: string;
+    role: UserRole;
+    organizationName?: string;
+    district?: string;
+    sector?: string;
+    preferredLanguage?: 'en' | 'rw';
+  }) => Promise<{ user: User; requiresOtp: boolean }>;
+} = {
+  async login(phoneOrEmailOrInput: string | LoginInput, password?: string): Promise<AuthResult> {
+    const identifier = typeof phoneOrEmailOrInput === 'string'
+      ? phoneOrEmailOrInput
+      : phoneOrEmailOrInput.identifier;
+    const clean = identifier.trim().toLowerCase();
+    const cleanPhone = normalizeRwandanPhone(clean);
+
     const user = usersState.find(
-      u => u.phone === clean || u.email.toLowerCase() === clean
+      u => u.phone === cleanPhone || u.email.toLowerCase() === clean
     );
 
     if (!user) {
@@ -135,9 +178,139 @@ export const authService = {
       throw new Error('This account is suspended (FR-AUTH-07).');
     }
 
+    const org = organizationsState.find(o => o.id === user.organizationId);
+
     // In demo mode, require simulated OTP for all first device logins
     await localStorage.setSessionUser(user);
-    return { user, requiresOtp: true };
+    return { user, requiresOtp: true, organization: org };
+  },
+
+  async registerSupplier(input: SupplierRegistrationInput): Promise<AuthResult> {
+    if (!input.fullName.trim()) {
+      throw new Error('Full name is required.');
+    }
+    const cleanPhone = normalizeRwandanPhone(input.phone);
+    if (!cleanPhone || cleanPhone.length < 10) {
+      throw new Error('A valid Rwandan phone number is required.');
+    }
+    if (!input.organizationName.trim()) {
+      throw new Error('Cooperative or organization name is required.');
+    }
+    if (!input.district.trim()) {
+      throw new Error('District is required.');
+    }
+
+    const cleanEmail = input.email ? input.email.trim().toLowerCase() : undefined;
+    if (cleanEmail && !isValidEmail(cleanEmail)) {
+      throw new Error('Please enter a valid email address.');
+    }
+
+    // Check duplicate
+    const existing = usersState.find(
+      u => u.phone === cleanPhone || (cleanEmail && u.email.toLowerCase() === cleanEmail)
+    );
+    if (existing) {
+      throw new Error('An account with this phone number or email already exists.');
+    }
+
+    const orgId = `org-supplier-${Date.now()}`;
+    const newOrg: Organization = {
+      id: orgId,
+      name: input.organizationName.trim(),
+      type: OrganizationType.SUPPLIER,
+      registrationNumber: `RCA/2026/${Math.floor(1000 + Math.random() * 9000)}`,
+      district: input.district.trim(),
+      sector: input.sector?.trim() || 'Sector',
+      contactPerson: input.fullName.trim(),
+      phone: cleanPhone,
+      cropsGrown: ['Maize', 'Dry Beans'],
+      verificationStatus: VerificationStatus.PENDING,
+      createdAt: new Date().toISOString(),
+    };
+    organizationsState.unshift(newOrg);
+
+    const newUser: User = {
+      id: `usr-supplier-${Date.now()}`,
+      fullName: input.fullName.trim(),
+      phone: cleanPhone,
+      email: cleanEmail || `${input.fullName.trim().toLowerCase().replace(/[^a-z0-9]/g, '.')}@cargo.rw`,
+      role: UserRole.SUPPLIER,
+      organizationId: orgId,
+      preferredLanguage: input.preferredLanguage || 'rw',
+      isActive: true,
+      isLocked: false,
+      failedLoginAttempts: 0,
+      onboardingCompleted: false,
+      verificationStatus: VerificationStatus.PENDING,
+      createdAt: new Date().toISOString(),
+    };
+
+    usersState.unshift(newUser);
+    await localStorage.setSessionUser(newUser);
+    return { user: newUser, requiresOtp: true, organization: newOrg };
+  },
+
+  async registerBuyer(input: BuyerRegistrationInput): Promise<AuthResult> {
+    if (!input.fullName.trim()) {
+      throw new Error('Full name is required.');
+    }
+    const cleanPhone = normalizeRwandanPhone(input.phone);
+    if (!cleanPhone || cleanPhone.length < 10) {
+      throw new Error('A valid Rwandan phone number is required.');
+    }
+    if (!input.enterpriseName.trim()) {
+      throw new Error('Enterprise or institution name is required.');
+    }
+    if (!input.district.trim()) {
+      throw new Error('District is required.');
+    }
+    const cleanEmail = input.email.trim().toLowerCase();
+    if (!isValidEmail(cleanEmail)) {
+      throw new Error('A valid email address is required for institutional buyers.');
+    }
+
+    // Check duplicate
+    const existing = usersState.find(
+      u => u.phone === cleanPhone || u.email.toLowerCase() === cleanEmail
+    );
+    if (existing) {
+      throw new Error('An account with this phone number or email already exists.');
+    }
+
+    const orgId = `org-buyer-${Date.now()}`;
+    const newOrg: Organization = {
+      id: orgId,
+      name: input.enterpriseName.trim(),
+      type: OrganizationType.BUYER,
+      registrationNumber: `RDB/2026/${Math.floor(1000 + Math.random() * 9000)}`,
+      district: input.district.trim(),
+      sector: input.sector?.trim() || 'Kigali',
+      contactPerson: input.fullName.trim(),
+      phone: cleanPhone,
+      verificationStatus: VerificationStatus.PENDING,
+      createdAt: new Date().toISOString(),
+    };
+    organizationsState.unshift(newOrg);
+
+    const newUser: User = {
+      id: `usr-buyer-${Date.now()}`,
+      fullName: input.fullName.trim(),
+      phone: cleanPhone,
+      email: cleanEmail,
+      role: UserRole.BUYER,
+      organizationId: orgId,
+      preferredLanguage: input.preferredLanguage || 'en',
+      isActive: true,
+      isLocked: false,
+      failedLoginAttempts: 0,
+      onboardingCompleted: false,
+      verificationStatus: VerificationStatus.PENDING,
+      createdAt: new Date().toISOString(),
+    };
+
+    usersState.unshift(newUser);
+    await localStorage.setSessionUser(newUser);
+    return { user: newUser, requiresOtp: true, organization: newOrg };
   },
 
   async register(input: {
@@ -151,63 +324,33 @@ export const authService = {
     sector?: string;
     preferredLanguage?: 'en' | 'rw';
   }): Promise<{ user: User; requiresOtp: boolean }> {
-    const rawPhone = input.phone.trim();
-    // Normalize phone number (handle Rwanda +250 or 07...)
-    let cleanPhone = rawPhone.replace(/\s+/g, '');
-    if (cleanPhone.startsWith('07')) {
-      cleanPhone = `+250${cleanPhone.substring(1)}`;
-    } else if (cleanPhone.startsWith('7') && cleanPhone.length === 9) {
-      cleanPhone = `+250${cleanPhone}`;
+    if (input.role === UserRole.SUPPLIER) {
+      const res = await this.registerSupplier({
+        fullName: input.fullName,
+        phone: input.phone,
+        organizationName: input.organizationName || `${input.fullName}'s Cooperative`,
+        district: input.district || 'Nyagatare',
+        sector: input.sector,
+        password: input.password,
+        email: input.email,
+        preferredLanguage: input.preferredLanguage,
+      });
+      return { user: res.user, requiresOtp: res.requiresOtp };
+    } else if (input.role === UserRole.BUYER) {
+      const res = await this.registerBuyer({
+        fullName: input.fullName,
+        phone: input.phone,
+        enterpriseName: input.organizationName || `${input.fullName}'s Enterprise`,
+        district: input.district || 'Gasabo (Kigali)',
+        sector: input.sector,
+        email: input.email || `${input.fullName.toLowerCase().replace(/[^a-z0-9]/g, '.')}@cargo.rw`,
+        password: input.password,
+        preferredLanguage: input.preferredLanguage,
+      });
+      return { user: res.user, requiresOtp: res.requiresOtp };
     }
 
-    const cleanEmail = input.email ? input.email.trim().toLowerCase() : undefined;
-
-    // Check for existing account with same phone or email
-    const existing = usersState.find(
-      u => u.phone === cleanPhone || (cleanEmail && u.email.toLowerCase() === cleanEmail)
-    );
-    if (existing) {
-      throw new Error('An account with this phone number or email already exists.');
-    }
-
-    let organizationId = 'org-cargo-operations';
-    if (input.role === UserRole.SUPPLIER || input.role === UserRole.BUYER) {
-      organizationId = `org-${input.role.toLowerCase()}-${Date.now()}`;
-      const newOrg: Organization = {
-        id: organizationId,
-        name:
-          input.organizationName?.trim() ||
-          `${input.fullName.trim()}'s ${input.role === UserRole.SUPPLIER ? 'Cooperative' : 'Enterprise'}`,
-        type: input.role === UserRole.SUPPLIER ? OrganizationType.SUPPLIER : OrganizationType.BUYER,
-        registrationNumber: `RCA/2026/${Math.floor(1000 + Math.random() * 9000)}`,
-        district: input.district || 'Kigali',
-        sector: input.sector || 'Nyarugenge',
-        contactPerson: input.fullName.trim(),
-        phone: cleanPhone,
-        cropsGrown: input.role === UserRole.SUPPLIER ? ['Maize', 'Dry Beans'] : undefined,
-        verificationStatus: VerificationStatus.PENDING,
-        createdAt: new Date().toISOString(),
-      };
-      organizationsState.unshift(newOrg);
-    }
-
-    const newUser: User = {
-      id: `usr-${input.role.toLowerCase()}-${Date.now()}`,
-      fullName: input.fullName.trim(),
-      phone: cleanPhone,
-      email: cleanEmail || `${input.fullName.trim().toLowerCase().replace(/[^a-z0-9]/g, '.')}@cargo.rw`,
-      role: input.role,
-      organizationId,
-      preferredLanguage: input.preferredLanguage || 'rw',
-      isActive: true,
-      isLocked: false,
-      failedLoginAttempts: 0,
-      createdAt: new Date().toISOString(),
-    };
-
-    usersState.unshift(newUser);
-    await localStorage.setSessionUser(newUser);
-    return { user: newUser, requiresOtp: true };
+    throw new Error('Public registration only permitted for Supplier or Buyer roles.');
   },
 
   async validateAgentInvitation(code: string): Promise<AgentInvitation> {
@@ -217,7 +360,7 @@ export const authService = {
     const cleanCode = code.trim().toUpperCase();
     const invitation = agentInvitationsState.find(inv => inv.code === cleanCode);
     if (!invitation) {
-      throw new Error('Invalid invitation code. Please check with Cargo Operations.');
+      throw new Error('Invalid invitation code. Demo fixture codes: AGENT-2026-RW or INV-AG-HUYE');
     }
     if (invitation.status === 'EXPIRED') {
       throw new Error('This invitation code has expired. Please request a new invitation from administrator.');
@@ -228,22 +371,12 @@ export const authService = {
     return invitation;
   },
 
-  async registerFieldAgentWithInvite(input: {
-    code: string;
-    fullName: string;
-    phone: string;
-    nationalId: string;
-    password?: string;
-    preferredLanguage?: 'en' | 'rw';
-  }): Promise<{ user: User; requiresOtp: boolean }> {
+  async registerFieldAgentWithInvite(input: AgentInviteRegistrationInput): Promise<AuthResult> {
     const invitation = await this.validateAgentInvitation(input.code);
 
-    const rawPhone = input.phone.trim();
-    let cleanPhone = rawPhone.replace(/\s+/g, '');
-    if (cleanPhone.startsWith('07')) {
-      cleanPhone = `+250${cleanPhone.substring(1)}`;
-    } else if (cleanPhone.startsWith('7') && cleanPhone.length === 9) {
-      cleanPhone = `+250${cleanPhone}`;
+    const cleanPhone = normalizeRwandanPhone(input.phone);
+    if (!cleanPhone || cleanPhone.length < 10) {
+      throw new Error('A valid Rwandan phone number is required.');
     }
 
     const existing = usersState.find(u => u.phone === cleanPhone);
@@ -251,11 +384,15 @@ export const authService = {
       throw new Error('An account with this phone number already exists.');
     }
 
-    // Mark invitation as redeemed
+    const newAgentId = `usr-agent-${Date.now()}`;
+
+    // Mark invitation as redeemed (single-use invariant)
     invitation.status = 'USED';
+    invitation.redeemedAt = new Date().toISOString();
+    invitation.redeemedByUserId = newAgentId;
 
     const newUser: User = {
-      id: `usr-agent-${Date.now()}`,
+      id: newAgentId,
       fullName: input.fullName.trim(),
       phone: cleanPhone,
       email: `${input.fullName.trim().toLowerCase().replace(/[^a-z0-9]/g, '.')}@cargo.rw`,
@@ -265,6 +402,13 @@ export const authService = {
       isActive: true,
       isLocked: false,
       failedLoginAttempts: 0,
+      onboardingCompleted: false,
+      verificationStatus: VerificationStatus.VERIFIED,
+      agentAssignment: {
+        district: invitation.district,
+        sector: invitation.sector,
+        supervisorName: invitation.supervisorName,
+      },
       createdAt: new Date().toISOString(),
     };
 
@@ -274,15 +418,91 @@ export const authService = {
   },
 
   async verifyOtp(code: string): Promise<boolean> {
-    // Simulated OTP check: any 6 digit code works
+    // Simulated OTP verification for demo prototype
     if (code && code.trim().length === 6) {
       return true;
     }
     throw new Error('Invalid verification code. Please enter 6 digits.');
   },
 
+  async restoreSession(): Promise<SessionValidationResult> {
+    try {
+      const stored = await localStorage.getSessionUser();
+      if (!stored) {
+        return { isValid: false, user: null };
+      }
+
+      // Validate session against active repository
+      const matched = usersState.find(u => u.id === stored.id);
+      if (!matched) {
+        await localStorage.setSessionUser(null);
+        return { isValid: false, user: null, error: 'Session user no longer exists in repository.' };
+      }
+
+      if (matched.isLocked) {
+        await localStorage.setSessionUser(null);
+        return { isValid: false, user: null, error: 'Account is locked.' };
+      }
+
+      if (!matched.isActive) {
+        await localStorage.setSessionUser(null);
+        return { isValid: false, user: null, error: 'Account is suspended.' };
+      }
+
+      return { isValid: true, user: matched };
+    } catch {
+      return { isValid: false, user: null, error: 'Failed to read session storage.' };
+    }
+  },
+
   async getCurrentUser(): Promise<User | null> {
     return await localStorage.getSessionUser();
+  },
+
+  async completeOnboarding(userId: string): Promise<User> {
+    const user = usersState.find(u => u.id === userId);
+    if (!user) {
+      throw new Error(`User ${userId} not found.`);
+    }
+
+    user.onboardingCompleted = true;
+    await localStorage.setSessionUser(user);
+    return user;
+  },
+
+  async getOnboardingStatus(user: User): Promise<AccountOnboardingStatus> {
+    const org = organizationsState.find(o => o.id === user.organizationId);
+    const pendingRequirements: string[] = [];
+
+    if (!user.onboardingCompleted) {
+      pendingRequirements.push('Complete role onboarding walkthrough');
+    }
+    if (org && org.verificationStatus === VerificationStatus.PENDING) {
+      pendingRequirements.push('Cooperative / Enterprise institutional verification');
+    }
+
+    return {
+      userId: user.id,
+      onboardingCompleted: Boolean(user.onboardingCompleted),
+      verificationStatus: org?.verificationStatus || user.verificationStatus || VerificationStatus.PENDING,
+      organization: org,
+      pendingRequirements,
+    };
+  },
+
+  async updateProfile(userId: string, input: ProfileUpdateInput): Promise<User> {
+    const user = usersState.find(u => u.id === userId);
+    if (!user) {
+      throw new Error(`User ${userId} not found.`);
+    }
+
+    if (input.fullName) user.fullName = input.fullName.trim();
+    if (input.email) user.email = input.email.trim();
+    if (input.phone) user.phone = normalizeRwandanPhone(input.phone);
+    if (input.preferredLanguage) user.preferredLanguage = input.preferredLanguage;
+
+    await localStorage.setSessionUser(user);
+    return user;
   },
 
   async logout(): Promise<void> {

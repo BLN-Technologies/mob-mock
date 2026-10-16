@@ -33,6 +33,8 @@ export const SEED_USERS: User[] = [
     isActive: true,
     isLocked: false,
     failedLoginAttempts: 0,
+    onboardingCompleted: true,
+    verificationStatus: VerificationStatus.VERIFIED,
     createdAt: '2026-09-01T08:00:00Z',
   },
   {
@@ -46,6 +48,13 @@ export const SEED_USERS: User[] = [
     isActive: true,
     isLocked: false,
     failedLoginAttempts: 0,
+    onboardingCompleted: true,
+    verificationStatus: VerificationStatus.VERIFIED,
+    agentAssignment: {
+      district: 'Nyagatare',
+      sector: 'Karangazi',
+      supervisorName: 'Cargo Agronomy Operations',
+    },
     createdAt: '2026-09-01T08:00:00Z',
   },
   {
@@ -59,6 +68,8 @@ export const SEED_USERS: User[] = [
     isActive: true,
     isLocked: false,
     failedLoginAttempts: 0,
+    onboardingCompleted: true,
+    verificationStatus: VerificationStatus.VERIFIED,
     createdAt: '2026-09-05T09:00:00Z',
   },
   {
@@ -72,6 +83,8 @@ export const SEED_USERS: User[] = [
     isActive: true,
     isLocked: false,
     failedLoginAttempts: 0,
+    onboardingCompleted: true,
+    verificationStatus: VerificationStatus.VERIFIED,
     createdAt: '2026-08-01T08:00:00Z',
   },
 ];

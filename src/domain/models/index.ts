@@ -26,6 +26,13 @@ export interface User {
   isLocked: boolean;
   failedLoginAttempts: number;
   lastLoginAt?: string;
+  onboardingCompleted?: boolean;
+  verificationStatus?: VerificationStatus;
+  agentAssignment?: {
+    district: string;
+    sector: string;
+    supervisorName: string;
+  };
   createdAt: string;
 }
 

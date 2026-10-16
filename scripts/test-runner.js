@@ -4,7 +4,7 @@ const fs = require('fs');
 try {
   console.log('Compiling domain tests...');
   execSync(
-    'npx tsc --ignoreConfig tests/run-domain-tests.ts src/domain/validation/lotValidation.ts src/domain/workflows/lotWorkflow.ts src/domain/workflows/orderWorkflow.ts src/domain/calculations/feeCalculator.ts src/domain/calculations/lotCalculations.ts src/domain/projections/buyerProjections.ts src/domain/enums/index.ts src/domain/models/index.ts --outDir dist-tests --module commonjs --target es2020 --esModuleInterop --skipLibCheck',
+    'npx tsc --ignoreConfig tests/run-domain-tests.ts src/domain/validation/lotValidation.ts src/domain/workflows/lotWorkflow.ts src/domain/workflows/orderWorkflow.ts src/domain/calculations/feeCalculator.ts src/domain/calculations/lotCalculations.ts src/domain/projections/buyerProjections.ts src/domain/enums/index.ts src/domain/models/index.ts src/core/navigation/routingPolicy.ts src/services/auth/authInterface.ts src/services/mock/mockServices.ts src/services/mock/seedData.ts src/data/local/storage.ts --outDir dist-tests --module commonjs --target es2020 --esModuleInterop --skipLibCheck',
     { stdio: 'inherit' }
   );
 

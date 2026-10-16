@@ -16,6 +16,7 @@ import { BuyerOnboardingScreen } from '../../features/auth/BuyerOnboardingScreen
 import { AgentOnboardingScreen } from '../../features/auth/AgentOnboardingScreen';
 import { AdminHandoffScreen } from '../../features/admin-handoff/AdminHandoffScreen';
 import { authService } from '../../services/mock/mockServices';
+import { resolveAuthenticatedRoute } from './routingPolicy';
 
 // Supplier Screens
 import { SupplierHomeScreen } from '../../features/supplier/SupplierHomeScreen';
@@ -77,17 +78,36 @@ export const RootNavigator: React.FC = () => {
   const [selectedBuyerLot, setSelectedBuyerLot] = useState<BuyerLotProjection | null>(null);
   const [selectedBuyerOrder, setSelectedBuyerOrder] = useState<Order | null>(null);
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    await authService.logout();
     setCurrentUser(null);
     setNewlyRegisteredUser(null);
     setAuthFlowStep('welcome');
+    setActiveTab('home');
   };
 
   if (bootstrapping) {
     return (
       <SplashScreen
         onBootstrapComplete={user => {
-          setCurrentUser(user);
+          if (user) {
+            const org = authService.getUserOrganization(user);
+            const route = resolveAuthenticatedRoute(user, org);
+            if (route.requiresOnboarding) {
+              setNewlyRegisteredUser(user);
+              if (route.destination === 'ONBOARDING_SUPPLIER') setAuthFlowStep('onboarding_supplier');
+              else if (route.destination === 'ONBOARDING_BUYER') setAuthFlowStep('onboarding_buyer');
+              else if (route.destination === 'ONBOARDING_AGENT') setAuthFlowStep('onboarding_agent');
+            } else if (
+              route.destination === 'ADMIN_HANDOFF' ||
+              route.destination === 'SUPPLIER_WORKSPACE' ||
+              route.destination === 'BUYER_WORKSPACE' ||
+              route.destination === 'AGENT_WORKSPACE'
+            ) {
+              setCurrentUser(user);
+              if (route.initialTab) setActiveTab(route.initialTab);
+            }
+          }
           setBootstrapping(false);
         }}
       />
@@ -152,8 +172,9 @@ export const RootNavigator: React.FC = () => {
         <SupplierOnboardingScreen
           user={newlyRegisteredUser}
           organization={org}
-          onComplete={() => {
-            setCurrentUser(newlyRegisteredUser);
+          onComplete={async () => {
+            const updated = await authService.completeOnboarding(newlyRegisteredUser.id);
+            setCurrentUser(updated);
             setActiveTab('home');
           }}
         />
@@ -166,8 +187,9 @@ export const RootNavigator: React.FC = () => {
         <BuyerOnboardingScreen
           user={newlyRegisteredUser}
           organization={org}
-          onComplete={() => {
-            setCurrentUser(newlyRegisteredUser);
+          onComplete={async () => {
+            const updated = await authService.completeOnboarding(newlyRegisteredUser.id);
+            setCurrentUser(updated);
             setActiveTab('catalogue');
           }}
         />
@@ -180,8 +202,9 @@ export const RootNavigator: React.FC = () => {
         <AgentOnboardingScreen
           user={newlyRegisteredUser}
           organization={org}
-          onComplete={() => {
-            setCurrentUser(newlyRegisteredUser);
+          onComplete={async () => {
+            const updated = await authService.completeOnboarding(newlyRegisteredUser.id);
+            setCurrentUser(updated);
             setActiveTab('tasks');
           }}
         />
@@ -192,14 +215,17 @@ export const RootNavigator: React.FC = () => {
       return (
         <LoginScreen
           onLoginSuccess={user => {
-            setCurrentUser(user);
-            setActiveTab(
-              user.role === UserRole.FIELD_AGENT
-                ? 'tasks'
-                : user.role === UserRole.BUYER
-                ? 'catalogue'
-                : 'home'
-            );
+            const org = authService.getUserOrganization(user);
+            const route = resolveAuthenticatedRoute(user, org);
+            if (route.requiresOnboarding) {
+              setNewlyRegisteredUser(user);
+              if (route.destination === 'ONBOARDING_SUPPLIER') setAuthFlowStep('onboarding_supplier');
+              else if (route.destination === 'ONBOARDING_BUYER') setAuthFlowStep('onboarding_buyer');
+              else if (route.destination === 'ONBOARDING_AGENT') setAuthFlowStep('onboarding_agent');
+            } else {
+              setCurrentUser(user);
+              if (route.initialTab) setActiveTab(route.initialTab);
+            }
           }}
           onNavigateToRegister={() => setAuthFlowStep('role_select')}
           onNavigateBack={() => setAuthFlowStep('welcome')}

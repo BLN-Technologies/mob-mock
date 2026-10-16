@@ -62,13 +62,27 @@ export const AgentOnboardingScreen: React.FC<AgentOnboardingScreenProps> = ({
             <View style={styles.profileMetaRow}>
               <View style={styles.metaItem}>
                 <Ionicons name="location-outline" size={14} color={colors.neutralGray} />
-                <Text style={styles.metaText}>{organization?.district || 'Operations Network'}</Text>
+                <Text style={styles.metaText}>
+                  {user.agentAssignment
+                    ? `${user.agentAssignment.district} · ${user.agentAssignment.sector}`
+                    : organization?.district || 'Operations Network'}
+                </Text>
               </View>
               <View style={styles.metaItem}>
                 <Ionicons name="call-outline" size={14} color={colors.neutralGray} />
                 <Text style={styles.metaText}>{user.phone}</Text>
               </View>
             </View>
+
+            {user.agentAssignment && (
+              <View style={styles.supervisorRow}>
+                <Ionicons name="person-outline" size={13} color={colors.neutralGray} />
+                <Text style={styles.supervisorText}>
+                  {language === 'rw' ? 'Umuyobozi w’ibikorwa:' : 'Operations Supervisor:'}{' '}
+                  {user.agentAssignment.supervisorName}
+                </Text>
+              </View>
+            )}
           </View>
 
           {/* Core Agent Guidance */}
@@ -214,6 +228,21 @@ const styles = StyleSheet.create({
     ...typography.caption,
     fontSize: 11,
     color: colors.neutralGray,
+  },
+  supervisorRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginTop: 6,
+    paddingTop: 6,
+    borderTopWidth: 1,
+    borderTopColor: colors.borderLight,
+  },
+  supervisorText: {
+    ...typography.caption,
+    fontSize: 11,
+    color: colors.neutralDark,
+    fontWeight: '600',
   },
   roadmapCard: {
     backgroundColor: '#FFFFFF',
