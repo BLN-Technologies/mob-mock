@@ -871,7 +871,7 @@ export const offerService = {
     const buyerFeeCalc = calculateBuyerFee(subtotalRwf);
     const totalPriceRwf = buyerFeeCalc.totalBuyerPayableRwf;
 
-    const offerId = `off-${Date.now()}`;
+    const offerId = `off-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
     const offerCount = offersState.length + 1;
     const offerCode = `OFF-202610-${String(offerCount).padStart(3, '0')}`;
     const newOffer: Offer = {
@@ -994,7 +994,7 @@ export const offerService = {
       const buyerOrg = organizationsState.find(o => o.id === offer.buyerOrgId);
 
       const newOrder: Order = {
-        id: `ord-${Date.now()}`,
+        id: `ord-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
         orderNumber,
         offerId: offer.id,
         buyerOrgId: offer.buyerOrgId,

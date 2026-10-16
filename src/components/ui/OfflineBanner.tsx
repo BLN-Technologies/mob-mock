@@ -4,7 +4,9 @@ import { Ionicons } from '@expo/vector-icons';
 import { colors, radii } from '../../theme/tokens';
 import { useTranslation } from '../../i18n';
 import { mockState, offlineQueueService } from '../../services/mock/mockServices';
+import { SyncStatus } from '../../domain/enums';
 import { localStorage } from '../../data/local/storage';
+import { OfflineQueueItem } from '../../domain/models';
 
 export const OfflineBanner: React.FC = () => {
   const { t } = useTranslation();
@@ -14,8 +16,8 @@ export const OfflineBanner: React.FC = () => {
 
   const checkQueue = async () => {
     try {
-      const queue = await localStorage.getOfflineQueue();
-      const pending = queue.filter(q => q.status === 'QUEUED' || q.status === 'FAILED');
+      const queue: OfflineQueueItem[] = await localStorage.getOfflineQueue();
+      const pending = queue.filter((q: OfflineQueueItem) => q.status !== SyncStatus.SYNCED);
       setQueuedCount(prev => (prev === pending.length ? prev : pending.length));
     } catch {
       // Ignored
@@ -24,7 +26,7 @@ export const OfflineBanner: React.FC = () => {
 
   useEffect(() => {
     checkQueue();
-    const interval = setInterval(checkQueue, 10000);
+    const interval = setInterval(checkQueue, 5000);
     return () => clearInterval(interval);
   }, []);
 
@@ -50,6 +52,8 @@ export const OfflineBanner: React.FC = () => {
         style={[styles.banner, isOffline ? styles.offlineBg : styles.onlineBg]}
         onPress={toggleOffline}
         activeOpacity={0.8}
+        accessibilityRole="button"
+        accessibilityLabel={isOffline ? t.agent.offlineMode : t.agent.onlineMode}
       >
         <Ionicons
           name={isOffline ? 'cloud-offline-outline' : 'cloud-done-outline'}
@@ -58,8 +62,8 @@ export const OfflineBanner: React.FC = () => {
         />
         <Text style={[styles.text, isOffline ? styles.offlineText : styles.onlineText]}>
           {isOffline
-            ? `Offline Mode (${queuedCount} queued)`
-            : `Online Mode${queuedCount > 0 ? ` (${queuedCount} pending sync)` : ''}`}
+            ? `${t.agent.offlineMode} (${queuedCount} ${t.agent.pendingCount.toLowerCase()})`
+            : `${t.agent.onlineMode}${queuedCount > 0 ? ` (${queuedCount} ${t.agent.waitingToSync.toLowerCase()})` : ''}`}
         </Text>
         <Text style={styles.toggleHint}>Tap to switch</Text>
       </TouchableOpacity>

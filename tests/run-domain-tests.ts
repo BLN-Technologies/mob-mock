@@ -10,7 +10,7 @@ import { isLotBuyerVisible, canTransitionLot, validateLotTransition } from '../s
 import { canTransitionOrder, validateOrderTransition } from '../src/domain/workflows/orderWorkflow';
 import { canTransitionOffer, validateOfferTransition, validateOfferStockAvailability } from '../src/domain/workflows/offerWorkflow';
 import { createSettlementsFromOrder, validateSettlementDisbursement } from '../src/domain/workflows/settlementWorkflow';
-import { calculateBuyerTotal, calculateSupplierPayout } from '../src/domain/calculations/feeCalculator';
+import { calculateBuyerTotal, calculateBuyerFee, calculateSupplierPayout, DEFAULT_FEE_SCHEDULE } from '../src/domain/calculations/feeCalculator';
 import { formatQuantity, formatRwf, calculateRemainingQuantity } from '../src/domain/calculations/lotCalculations';
 import { projectLotForBuyer, projectAllocationsForBuyer } from '../src/domain/projections/buyerProjections';
 import { LotStatus, OrderStatus, QualityGrade, PaymentStatus, UserRole, VerificationStatus, OfferStatus, DisputeStatus, DisputeOutcome, PaymentMethod, SyncStatus, SyncErrorCategory } from '../src/domain/enums';
@@ -22,6 +22,9 @@ import { inspectionRepository } from '../src/data/local/inspectionRepository';
 import { syncCoordinator } from '../src/services/sync/syncCoordinator';
 import { mockSyncAdapter } from '../src/services/sync/syncAdapter';
 import { localStorage } from '../src/data/local/storage';
+import { config, isDemoEnvironment } from '../src/core/config/env';
+import { logger } from '../src/core/logging/logger';
+import { normalizeError, ErrorCode, AppError } from '../src/core/errors/appError';
 
 declare const process: any;
 
@@ -1571,6 +1574,243 @@ async function runAllTests() {
     assert(buyerLot !== undefined, 'Step 11: Buyer can view verified lot');
     assert((buyerLot as any).supplierId === undefined, 'Step 11: Direct supplier identity protected (BR-05)');
     assert((buyerLot as any).pickupLocationDetails === undefined, 'Step 11: Private warehouse location protected (BR-05)');
+  }
+
+  // 22. Phase 5 Financial Invariants & Arithmetic Bounds
+  console.log('[Suite 22: Phase 5 Financial Invariants & Arithmetic Bounds]');
+  {
+    // 1. Standard 5% buyer fee and 3% supplier fee
+    const standardBuyer = calculateBuyerTotal(2000000);
+    assert(standardBuyer.buyerFeeRwf === 100000, 'Calculates exact 5% buyer fee on 2,000,000 RWF (100,000 RWF)');
+    assert(standardBuyer.totalAmountRwf === 2100000, 'Calculates total buyer payable as 2,100,000 RWF');
+
+    const standardSupplier = calculateSupplierPayout(2000000);
+    assert(standardSupplier.supplierFeeRwf === 60000, 'Calculates exact 3% supplier fee on 2,000,000 RWF (60,000 RWF)');
+    assert(standardSupplier.netPayoutRwf === 1940000, 'Calculates net supplier payout as 1,940,000 RWF');
+    assert(standardSupplier.supplierFeeRwf + standardSupplier.netPayoutRwf === 2000000, 'Preserves gross value conservation on standard volume');
+
+    // 2. Zero boundary condition
+    const zeroBuyer = calculateBuyerTotal(0);
+    assert(zeroBuyer.buyerFeeRwf === 0 && zeroBuyer.totalAmountRwf === 0, 'Zero subtotal yields 0 buyer fee and 0 total');
+    const zeroSupplier = calculateSupplierPayout(0);
+    assert(zeroSupplier.supplierFeeRwf === 0 && zeroSupplier.netPayoutRwf === 0, 'Zero subtotal yields 0 supplier fee and 0 payout');
+
+    // 3. Negative and NaN defensive handling
+    const negBuyer = calculateBuyerTotal(-5000);
+    assert(negBuyer.buyerFeeRwf === 0 && negBuyer.totalAmountRwf === 0, 'Defensive arithmetic: negative subtotal safely returns 0');
+    const nanSupplier = calculateSupplierPayout(NaN);
+    assert(nanSupplier.supplierFeeRwf === 0 && nanSupplier.netPayoutRwf === 0, 'Defensive arithmetic: NaN safely returns 0');
+
+    // 4. Non-fractional integer rounding on odd numbers
+    const oddSubtotal = 33333;
+    const oddBuyer = calculateBuyerTotal(oddSubtotal);
+    // 33333 * 0.05 = 1666.65 -> Math.round -> 1667
+    assert(oddBuyer.buyerFeeRwf === 1667, 'Rounds 5% fee on 33,333 to integer 1,667 RWF');
+    assert(oddBuyer.totalAmountRwf === 35000, 'Total buyer payable rounds cleanly to 35,000 RWF');
+
+    const oddSupplier = calculateSupplierPayout(oddSubtotal);
+    // 33333 * 0.03 = 999.99 -> Math.round -> 1000
+    assert(oddSupplier.supplierFeeRwf === 1000, 'Rounds 3% fee on 33,333 to integer 1,000 RWF');
+    assert(oddSupplier.netPayoutRwf === 32333, 'Net supplier payout is integer 32,333 RWF');
+    assert(oddSupplier.supplierFeeRwf + oddSupplier.netPayoutRwf === oddSubtotal, 'Odd subtotal preserves exact gross conservation (1,000 + 32,333 === 33,333)');
+
+    // 5. Massive wholesale trade (100 Million RWF)
+    const largeTrade = 100000000;
+    const largeBuyer = calculateBuyerTotal(largeTrade);
+    assert(largeBuyer.buyerFeeRwf === 5000000, 'Calculates 5,000,000 RWF fee on 100M RWF wholesale order');
+    const largeSupplier = calculateSupplierPayout(largeTrade);
+    assert(largeSupplier.supplierFeeRwf === 3000000, 'Calculates 3,000,000 RWF fee on 100M RWF wholesale order');
+    assert(largeSupplier.supplierFeeRwf + largeSupplier.netPayoutRwf === largeTrade, 'Massive volume preserves exact conservation');
+
+    // 6. Consistency between calculateBuyerFee and calculateBuyerTotal
+    const feeDirect = calculateBuyerFee(500000);
+    assert(feeDirect.buyerFeeRwf === 25000 && feeDirect.totalBuyerPayableRwf === 525000, 'calculateBuyerFee matches calculateBuyerTotal output');
+  }
+
+  // 23. Phase 5 Security Hardening, Role Routing & Session Isolation
+  console.log('[Suite 23: Phase 5 Security Hardening, Role Routing & Session Isolation]');
+  {
+    await mockState.resetAll();
+
+    // 1. Unauthenticated route protection
+    assert(canAccessDestination('SUPPLIER_WORKSPACE', null) === false, 'Blocks unauthenticated access to SUPPLIER_WORKSPACE');
+    assert(canAccessDestination('BUYER_WORKSPACE', null) === false, 'Blocks unauthenticated access to BUYER_WORKSPACE');
+    assert(canAccessDestination('AGENT_WORKSPACE', null) === false, 'Blocks unauthenticated access to AGENT_WORKSPACE');
+    assert(canAccessDestination('ADMIN_HANDOFF', null) === false, 'Blocks unauthenticated access to ADMIN_HANDOFF');
+
+    // 2. Account lock security policy
+    const lockedUser: User = {
+      ...SEED_USERS[0],
+      isLocked: true,
+    };
+    const lockedResolution = resolveAuthenticatedRoute(lockedUser);
+    assert(lockedResolution.destination === 'UNAUTHORIZED', 'Locked account resolves to UNAUTHORIZED');
+    assert(lockedResolution.statusNotice?.includes('locked') === true, 'Provides security policy lockout notice');
+
+    // 3. Suspended account security policy
+    const suspendedUser: User = {
+      ...SEED_USERS[0],
+      isLocked: false,
+      isActive: false,
+    };
+    const suspendedResolution = resolveAuthenticatedRoute(suspendedUser);
+    assert(suspendedResolution.destination === 'UNAUTHORIZED', 'Suspended account resolves to UNAUTHORIZED');
+
+    // 4. Role boundaries
+    const supplierUser = SEED_USERS.find(u => u.role === UserRole.SUPPLIER)!;
+    const buyerUser = SEED_USERS.find(u => u.role === UserRole.BUYER)!;
+    const agentUser = SEED_USERS.find(u => u.role === UserRole.FIELD_AGENT)!;
+
+    assert(canAccessDestination('SUPPLIER_WORKSPACE', supplierUser) === true, 'Supplier can access SUPPLIER_WORKSPACE');
+    assert(canAccessDestination('BUYER_WORKSPACE', supplierUser) === false, 'Supplier cannot access BUYER_WORKSPACE');
+    assert(canAccessDestination('AGENT_WORKSPACE', supplierUser) === false, 'Supplier cannot access AGENT_WORKSPACE');
+
+    assert(canAccessDestination('BUYER_WORKSPACE', buyerUser) === true, 'Buyer can access BUYER_WORKSPACE');
+    assert(canAccessDestination('SUPPLIER_WORKSPACE', buyerUser) === false, 'Buyer cannot access SUPPLIER_WORKSPACE');
+
+    assert(canAccessDestination('AGENT_WORKSPACE', agentUser) === true, 'Agent can access AGENT_WORKSPACE');
+    assert(canAccessDestination('ADMIN_HANDOFF', agentUser) === false, 'Agent cannot access ADMIN_HANDOFF');
+
+    // 5. Logout preserves offline inspection queue items (Section 5.4 invariant)
+    await localStorage.enqueueOfflineItem({
+      id: 'op-preserve-test-01',
+      type: 'SUBMIT_GRADING',
+      entityId: 'lot-001',
+      payload: { lotId: 'lot-001' },
+      status: SyncStatus.QUEUED,
+      retryCount: 0,
+      createdAt: new Date().toISOString(),
+    });
+    await authService.logout();
+    const sessionAfterLogout = await localStorage.getSessionUser();
+    assert(sessionAfterLogout === null, 'Logout clears active session user');
+    const queueAfterLogout = await localStorage.getOfflineQueue();
+    assert(queueAfterLogout.some(q => q.id === 'op-preserve-test-01'), 'Logout preserves unsynced offline queue items in local storage');
+  }
+
+  // 24. Phase 5 End-to-End Edge Cases, Stress & Dispute Isolation
+  console.log('[Suite 24: Phase 5 End-to-End Edge Cases, Stress & Dispute Isolation]');
+  {
+    await mockState.resetAll();
+    const buyer = SEED_USERS.find(u => u.role === UserRole.BUYER)!;
+    const supplier = SEED_USERS.find(u => u.role === UserRole.SUPPLIER)!;
+    const admin = SEED_USERS.find(u => u.role === UserRole.ADMINISTRATOR)!;
+    const inspector = SEED_USERS.find(u => u.role === UserRole.FIELD_AGENT)!;
+
+    // 1. Environment configuration sanity check
+    assert(isDemoEnvironment() === true, 'Recognizes current environment as Demo/Mock environment');
+    assert(config.isProduction === false, 'Production mode flag is false in demo environment');
+
+    // 2. Sensitive log redaction check
+    const logResult = logger.writeLog('INFO', 'User login attempt', 'AuthModule', {
+      phone: '+250788111222',
+      password: 'SuperSecretPassword123!',
+      token: 'jwt.sample.token',
+    });
+    assert(logResult.data?.password === '[REDACTED]', 'Logger automatically redacts password from log output');
+    assert(logResult.data?.token === '[REDACTED]', 'Logger automatically redacts authorization tokens');
+    assert(logResult.data?.phone === '+250788111222', 'Preserves non-sensitive operational identifiers');
+
+    // 3. Centralized error normalization
+    const br01Norm = normalizeError(new Error('Validation failed under BR-01 readiness'));
+    assert(br01Norm.code === ErrorCode.BR_VIOLATION, 'Normalizes BR-01 violation to ErrorCode.BR_VIOLATION');
+    assert(br01Norm.messageEn.includes('BR-01') && br01Norm.messageRw.includes('BR-01'), 'Provides bilingual normalized message for BR-01');
+
+    const netNorm = normalizeError(new Error('Network connection timeout'));
+    assert(netNorm.code === ErrorCode.NETWORK_ERROR, 'Normalizes network timeout to ErrorCode.NETWORK_ERROR');
+
+    // 4. Dispute isolation: Opening a dispute on Order 1 pauses Order 1's settlement while Order 2 is unaffected
+    const lotDispute = await lotService.createLot({
+      cropName: 'Maize',
+      variety: 'Yellow Feed Maize',
+      totalQuantityKg: 10000,
+      pricePerKgRwf: 400,
+      harvestDate: '2026-10-01',
+      availabilityDate: '2026-10-15',
+      pickupDistrict: 'Bugesera',
+      pickupSector: 'Nyamata',
+      pickupLocationDetails: 'Bugesera Central Depot Bay 1',
+      harvestConfirmed: true,
+      photos: ['https://example.com/maize.jpg'],
+    }, supplier);
+
+    await gradingService.submitGrading(
+      lotDispute.id,
+      inspector,
+      { moisture: 12.0, foreignMatter: 0.5, defects: 1.0 },
+      ['https://example.com/photo.jpg'],
+      'Passed grading'
+    );
+
+    await adminApprovalService.approveLot(lotDispute.id, admin);
+
+    const off1 = await offerService.createOffer(buyer, {
+      lotId: lotDispute.id,
+      quantityKg: 1000,
+      unitPriceRwf: 400,
+      deliveryDistrict: 'Kigali (Gasabo)',
+      deliveryDate: '2026-10-28',
+    });
+    await offerService.respondToOffer(off1.id, 'ACCEPT', 'Offer 1 accepted', undefined, supplier);
+
+    const off2 = await offerService.createOffer(buyer, {
+      lotId: lotDispute.id,
+      quantityKg: 1000,
+      unitPriceRwf: 400,
+      deliveryDistrict: 'Kigali (Gasabo)',
+      deliveryDate: '2026-10-29',
+    });
+    await offerService.respondToOffer(off2.id, 'ACCEPT', 'Offer 2 accepted', undefined, supplier);
+
+    const allOrders = await orderService.getOrders(buyer);
+    const order1 = allOrders.find(o => o.offerId === off1.id)!;
+    const order2 = allOrders.find(o => o.offerId === off2.id)!;
+    assert(order1 !== undefined && order2 !== undefined, 'Created 2 distinct test orders for dispute isolation');
+
+    // Pay both orders into escrow (BR-03)
+    await orderService.simulatePayment(order1.id, PaymentMethod.MOBILE_MONEY, buyer);
+    await orderService.simulatePayment(order2.id, PaymentMethod.MOBILE_MONEY, buyer);
+
+    // Dispatch, deliver, and accept both orders
+    await orderService.dispatchOrder(order1.id, supplier);
+    await orderService.recordDelivery(order1.id, supplier, 'Delivered order 1 to warehouse');
+    await orderService.acceptOrder(order1.id, buyer);
+
+    await orderService.dispatchOrder(order2.id, supplier);
+    await orderService.recordDelivery(order2.id, supplier, 'Delivered order 2 to warehouse');
+    await orderService.acceptOrder(order2.id, buyer);
+
+    // Open dispute specifically on Order 1
+    await disputeService.openDispute(
+      order1.id,
+      buyer,
+      'Damaged packaging in transit',
+      'Moisture spotted on 3 sacks',
+      []
+    );
+    assert(order1.status === OrderStatus.DISPUTED && order1.hasActiveDispute === true, 'Order 1 is in DISPUTED status');
+    assert(order2.status === OrderStatus.ACCEPTED && order2.hasActiveDispute === false, 'Order 2 remains in ACCEPTED status without dispute');
+
+    // Verify settlements: Order 1 settlements are PAUSED, Order 2 settlements remain ELIGIBLE
+    const settlementsSupplier = await settlementService.getSettlements(supplier);
+    const order1Settlements = settlementsSupplier.filter(s => s.orderId === order1.id);
+    const order2Settlements = settlementsSupplier.filter(s => s.orderId === order2.id);
+
+    assert(order1Settlements.every(s => s.status === 'PAUSED'), 'All Order 1 settlements are strictly PAUSED under dispute (BR-04)');
+    assert(order2Settlements.every(s => s.status === 'ELIGIBLE'), 'Order 2 settlements remain completely ELIGIBLE for disbursement');
+
+    // Order 2 can be disbursed while Order 1 is frozen
+    const stl2 = order2Settlements[0];
+    await settlementService.disburseSettlement(stl2.id, admin);
+    assert(stl2.status === 'SETTLED', 'Order 2 settlement successfully disbursed during independent Order 1 dispute');
+
+    // Resolve Order 1 dispute
+    const openDisputes = await disputeService.getDisputes(buyer);
+    const dsp1 = openDisputes.find(d => d.orderId === order1.id)!;
+    await disputeService.resolveDispute(dsp1.id, admin, DisputeOutcome.FULL_PAYOUT, 'Inspected and certified compliant');
+
+    assert(order1.hasActiveDispute === false, 'Order 1 active dispute flag cleared');
+    assert(order1Settlements.every(s => s.status === 'ELIGIBLE'), 'Order 1 settlements unpaused and now ELIGIBLE');
   }
 
   console.log(`\n========================================`);
