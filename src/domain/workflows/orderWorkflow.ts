@@ -54,6 +54,34 @@ export function validateOrderTransition(order: Order, targetStatus: OrderStatus)
     }
   }
 
+  // Delivery validation: cannot deliver before valid dispatch
+  if (targetStatus === OrderStatus.DELIVERED) {
+    if (order.status !== OrderStatus.DISPATCHED) {
+      return {
+        success: false,
+        error: 'Cannot record delivery: Order has not been dispatched yet (FR-DEL-01).',
+      };
+    }
+  }
+
+  // Acceptance validation: cannot accept before physical delivery
+  if (targetStatus === OrderStatus.ACCEPTED) {
+    if (order.status !== OrderStatus.DELIVERED) {
+      return {
+        success: false,
+        error: 'Cannot accept order: Delivery receipt must be recorded before buyer acceptance (FR-DEL-03).',
+      };
+    }
+  }
+
+  // Dispute guard: active disputes pause further progression
+  if (order.hasActiveDispute && (targetStatus === OrderStatus.SETTLED || targetStatus === OrderStatus.DISPATCHED)) {
+    return {
+      success: false,
+      error: 'Cannot transition order: An active trade dispute is currently unresolved.',
+    };
+  }
+
   // Terms acceptance required before moving to Confirmed/Payment Pending
   if (targetStatus === OrderStatus.CONFIRMED || targetStatus === OrderStatus.PAYMENT_PENDING) {
     if (!order.termsAcceptedByBuyer) {

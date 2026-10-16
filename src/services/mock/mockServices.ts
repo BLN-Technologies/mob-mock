@@ -17,6 +17,7 @@ import {
   Dispute,
   AppNotification,
   OfflineQueueItem,
+  SettlementRecord,
 } from '../../domain/models';
 import {
   UserRole,
@@ -36,6 +37,16 @@ import {
 import { validateLotDeclaration, LotValidationInput } from '../../domain/validation/lotValidation';
 import { isLotBuyerVisible, validateLotTransition } from '../../domain/workflows/lotWorkflow';
 import { validateOrderTransition } from '../../domain/workflows/orderWorkflow';
+import {
+  canTransitionOffer,
+  validateOfferTransition,
+  validateOfferStockAvailability,
+} from '../../domain/workflows/offerWorkflow';
+import {
+  createSettlementsFromOrder,
+  validateSettlementDisbursement,
+} from '../../domain/workflows/settlementWorkflow';
+import { calculateBuyerFee, calculateSupplierPayout } from '../../domain/calculations/feeCalculator';
 import { projectLotForBuyer } from '../../domain/projections/buyerProjections';
 import { localStorage } from '../../data/local/storage';
 import {
@@ -56,6 +67,7 @@ let organizationsState: Organization[] = [...SEED_ORGANIZATIONS];
 let lotsState: Lot[] = [...SEED_LOTS];
 let offersState: Offer[] = [...SEED_OFFERS];
 let ordersState: Order[] = [...SEED_ORDERS];
+let settlementsState: SettlementRecord[] = SEED_ORDERS.flatMap(o => createSettlementsFromOrder(o));
 let disputesState: Dispute[] = [];
 let notificationsState: AppNotification[] = [...SEED_NOTIFICATIONS];
 let gradingRecordsState: GradingRecord[] = [];
@@ -118,6 +130,7 @@ export const mockState = {
     lotsState = [...SEED_LOTS];
     offersState = [...SEED_OFFERS];
     ordersState = [...SEED_ORDERS];
+    settlementsState = SEED_ORDERS.flatMap(o => createSettlementsFromOrder(o));
     disputesState = [];
     notificationsState = [...SEED_NOTIFICATIONS];
     gradingRecordsState = [];
@@ -718,13 +731,10 @@ export const gradingService = {
       return gradingRecord;
     }
 
-    // Server authoritative update
+    // Server authoritative update: Field inspection complete, awaiting administrative approval (BR-02)
     lot.grade = calculatedGrade;
     lot.gradedAt = new Date().toISOString();
     lot.inspectedByAgentId = agent.id;
-    // In demo flow, admin approves graded lot so it becomes buyer-visible
-    lot.status = LotStatus.VERIFIED;
-    lot.adminApprovedAt = new Date().toISOString();
     lot.updatedAt = new Date().toISOString();
 
     // Notify supplier
@@ -734,13 +744,85 @@ export const gradingService = {
       type: NotificationType.LOT,
       titleEn: `Lot Graded: ${lot.lotCode}`,
       titleRw: `Umusaruro wagenzuwe: ${lot.lotCode}`,
-      messageEn: `Your lot was graded ${calculatedGrade} and is now visible to institutional buyers.`,
-      messageRw: `Umusaruro wawe wabonye ${calculatedGrade} ukaba ugaragara ku isoko ry'abaguzi.`,
+      messageEn: `Your lot was graded ${calculatedGrade} and is awaiting administrative operations approval before market listing.`,
+      messageRw: `Umusaruro wawe wabonye ${calculatedGrade} utegereje kwemezwa n'ubuyobozi bwa Cargo mbere yo kwinjira ku isoko.`,
       isRead: false,
       createdAt: new Date().toISOString(),
     });
 
     return gradingRecord;
+  },
+};
+
+// 3.1 Administrator Operations & Approval Service (BR-02)
+export const adminApprovalService = {
+  async getPendingLots(): Promise<Lot[]> {
+    // Lots that have been inspected & graded by field agent, but not yet approved by admin
+    return lotsState.filter(l => !!l.grade && !l.adminApprovedAt && l.status !== LotStatus.REJECTED);
+  },
+
+  async approveLot(lotId: string, adminUser: User): Promise<Lot> {
+    const lot = lotsState.find(l => l.id === lotId);
+    if (!lot) throw new Error('Lot not found');
+
+    if (adminUser.role !== UserRole.ADMINISTRATOR) {
+      throw new Error('Only an authorized Cargo Administrator can approve agricultural lots for trade (BR-02).');
+    }
+
+    if (!lot.grade || !lot.inspectedByAgentId) {
+      throw new Error('Cannot approve lot: Quality grading by an authorized field agent is strictly required (BR-02).');
+    }
+
+    const transitionCheck = validateLotTransition(lot, LotStatus.VERIFIED);
+    if (!transitionCheck.success) {
+      throw new Error(transitionCheck.error || 'Invalid lot transition to verified');
+    }
+
+    lot.status = LotStatus.VERIFIED;
+    lot.adminApprovedAt = new Date().toISOString();
+    lot.updatedAt = new Date().toISOString();
+
+    // Notify supplier
+    notificationsState.unshift({
+      id: `ntf-${Date.now()}`,
+      userId: lot.supplierId,
+      type: NotificationType.LOT,
+      titleEn: `Lot Approved for Trade: ${lot.lotCode}`,
+      titleRw: `Umusaruro Wemejwe: ${lot.lotCode}`,
+      messageEn: `Your lot was approved by Cargo Operations and is now active on the Buyer Discover catalogue.`,
+      messageRw: `Umusaruro wawe wemejwe n'ubuyobozi bwa Cargo, ubu uragaragara mu bacuruzi.`,
+      isRead: false,
+      createdAt: new Date().toISOString(),
+    });
+
+    return lot;
+  },
+
+  async rejectLot(lotId: string, adminUser: User, reason: string): Promise<Lot> {
+    const lot = lotsState.find(l => l.id === lotId);
+    if (!lot) throw new Error('Lot not found');
+
+    if (adminUser.role !== UserRole.ADMINISTRATOR) {
+      throw new Error('Only an authorized Cargo Administrator can reject agricultural lots.');
+    }
+
+    lot.status = LotStatus.REJECTED;
+    lot.updatedAt = new Date().toISOString();
+
+    // Notify supplier
+    notificationsState.unshift({
+      id: `ntf-${Date.now()}`,
+      userId: lot.supplierId,
+      type: NotificationType.LOT,
+      titleEn: `Lot Returned / Rejected: ${lot.lotCode}`,
+      titleRw: `Umusaruro Wasubijwe Inyuma: ${lot.lotCode}`,
+      messageEn: `Lot review not approved: ${reason}`,
+      messageRw: `Isuzuma ry'umusaruro ntabwo ryemejwe: ${reason}`,
+      isRead: false,
+      createdAt: new Date().toISOString(),
+    });
+
+    return lot;
   },
 };
 
@@ -750,26 +832,145 @@ export const offerService = {
     return offersState.filter(o => o.buyerOrgId === buyerOrgId);
   },
 
+  async getOffersForSupplier(supplierOrgId: string): Promise<Offer[]> {
+    return offersState.filter(o =>
+      o.lines.some(l => l.supplierOrgId === supplierOrgId)
+    );
+  },
+
+  async createOffer(
+    buyerUser: User,
+    input: {
+      lotId: string;
+      quantityKg: number;
+      unitPriceRwf?: number;
+      deliveryDistrict: string;
+      deliveryDate: string;
+      notes?: string;
+    }
+  ): Promise<Offer> {
+    if (buyerUser.role !== UserRole.BUYER) {
+      throw new Error('Only authorized institutional buyers can create purchase offers.');
+    }
+
+    const lot = lotsState.find(l => l.id === input.lotId);
+    if (!lot) throw new Error('Lot not found');
+
+    if (!isLotBuyerVisible(lot)) {
+      throw new Error('Cannot create offer: This lot is not approved or available for trading (BR-02).');
+    }
+
+    if (input.quantityKg <= 0 || isNaN(input.quantityKg)) {
+      throw new Error('Offer quantity must be greater than zero.');
+    }
+
+    if (input.quantityKg > lot.remainingQuantityKg) {
+      throw new Error(
+        `Requested quantity (${input.quantityKg.toLocaleString()} kg) exceeds remaining available stock (${lot.remainingQuantityKg.toLocaleString()} kg).`
+      );
+    }
+
+    const unitPrice = input.unitPriceRwf && input.unitPriceRwf > 0 ? input.unitPriceRwf : lot.pricePerKgRwf;
+    const subtotalRwf = Math.round(input.quantityKg * unitPrice);
+    const buyerFeeCalc = calculateBuyerFee(subtotalRwf);
+    const totalPriceRwf = buyerFeeCalc.totalBuyerPayableRwf;
+
+    const offerId = `off-${Date.now()}`;
+    const offerCount = offersState.length + 1;
+    const offerCode = `OFF-202610-${String(offerCount).padStart(3, '0')}`;
+    const newOffer: Offer = {
+      id: offerId,
+      offerCode,
+      buyerOrgId: buyerUser.organizationId,
+      status: OfferStatus.PROPOSED,
+      cropName: lot.cropName,
+      grade: lot.grade || QualityGrade.GRADE_A,
+      totalQuantityKg: input.quantityKg,
+      averagePricePerKgRwf: unitPrice,
+      subtotalRwf,
+      platformFeeRwf: buyerFeeCalc.buyerFeeRwf,
+      inspectionFeeRwf: 0,
+      totalPriceRwf,
+      deliveryDistrict: input.deliveryDistrict,
+      deliveryDate: input.deliveryDate,
+      supplierCount: 1,
+      lines: [
+        {
+          id: `line-${Date.now()}`,
+          lotId: lot.id,
+          lotCode: lot.lotCode,
+          cropName: lot.cropName,
+          grade: lot.grade || QualityGrade.GRADE_A,
+          supplierOrgId: lot.organizationId,
+          quantityKg: input.quantityKg,
+          unitPriceRwf: unitPrice,
+          subtotalRwf,
+        },
+      ],
+      negotiationTimeline: [
+        {
+          id: `neg-${Date.now()}`,
+          senderRole: UserRole.BUYER,
+          senderName: buyerUser.fullName,
+          timestamp: new Date().toISOString(),
+          action: 'PROPOSE',
+          notes: input.notes || `Proposed purchase of ${input.quantityKg} kg @ ${unitPrice} RWF/kg`,
+        },
+      ],
+      expiresAt: new Date(Date.now() + 7 * 86400000).toISOString(),
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+
+    offersState.unshift(newOffer);
+
+    // Notify supplier
+    notificationsState.unshift({
+      id: `ntf-${Date.now()}`,
+      userId: lot.supplierId,
+      type: NotificationType.OFFER,
+      titleEn: `New Purchase Offer: ${lot.lotCode}`,
+      titleRw: `Ubusabe bushya bwo kugura: ${lot.lotCode}`,
+      messageEn: `Buyer offered ${unitPrice} RWF/kg for ${input.quantityKg.toLocaleString()} kg of ${lot.cropName}.`,
+      messageRw: `Umuguzi yasabye kugura ${input.quantityKg.toLocaleString()} kg kuri ${unitPrice} RWF/kg.`,
+      isRead: false,
+      createdAt: new Date().toISOString(),
+    });
+
+    return newOffer;
+  },
+
   async respondToOffer(
     offerId: string,
     action: 'ACCEPT' | 'DECLINE' | 'COUNTER',
     notes?: string,
-    counterPricePerKgRwf?: number
+    counterPricePerKgRwf?: number,
+    actor?: User
   ): Promise<Offer> {
     const offer = offersState.find(o => o.id === offerId);
     if (!offer) throw new Error('Offer not found');
 
-    if (offer.status !== OfferStatus.PROPOSED && offer.status !== OfferStatus.COUNTERED) {
-      throw new Error(`Cannot respond to offer in ${offer.status} status`);
+    const actorRole = actor?.role || (action === 'ACCEPT' && offer.status === OfferStatus.PROPOSED ? UserRole.SUPPLIER : UserRole.BUYER);
+
+    const targetStatus =
+      action === 'ACCEPT'
+        ? OfferStatus.ACCEPTED
+        : action === 'DECLINE'
+        ? OfferStatus.DECLINED
+        : OfferStatus.COUNTERED;
+
+    const transitionCheck = validateOfferTransition(offer, targetStatus, actorRole, counterPricePerKgRwf);
+    if (!transitionCheck.success) {
+      throw new Error(transitionCheck.error || `Cannot respond to offer in ${offer.status} status`);
     }
 
     if (action === 'ACCEPT') {
-      // Atomic reservation across ALL allocations (FR-REQ-06)
-      for (const line of offer.lines) {
-        const lot = lotsState.find(l => l.id === line.lotId);
-        if (!lot || lot.remainingQuantityKg < line.quantityKg) {
-          throw new Error(`Stock allocation for lot ${line.lotCode} is no longer available. Cannot accept offer.`);
-        }
+      // Validate atomic stock availability across all allocations
+      const stockCheck = validateOfferStockAvailability(offer, lotId => {
+        return lotsState.find(l => l.id === lotId)?.remainingQuantityKg;
+      });
+      if (!stockCheck.success) {
+        throw new Error(stockCheck.error || 'Insufficient stock to accept offer');
       }
 
       // Reserve stock atomically
@@ -778,46 +979,55 @@ export const offerService = {
         lot.remainingQuantityKg -= line.quantityKg;
         lot.reservedQuantityKg += line.quantityKg;
         lot.status = LotStatus.RESERVED;
+        lot.updatedAt = new Date().toISOString();
       }
 
       offer.status = OfferStatus.ACCEPTED;
       offer.negotiationTimeline.push({
         id: `neg-${Date.now()}`,
-        senderRole: UserRole.BUYER,
-        senderName: 'David (Buyer)',
+        senderRole: actorRole,
+        senderName: actor?.fullName || (actorRole === UserRole.SUPPLIER ? 'Supplier Representative' : 'Buyer Representative'),
         timestamp: new Date().toISOString(),
         action: 'ACCEPT',
-        notes: notes || 'Offer accepted. Please prepare order confirmation.',
+        notes: notes || 'Offer accepted. Trade confirmation order generated.',
       });
 
       // Create new Order automatically from accepted offer (FR-ORD-01)
+      const orderCount = ordersState.length + 1;
+      const orderNumber = `ORD-202610-${String(orderCount).padStart(3, '0')}`;
+      const buyerOrg = organizationsState.find(o => o.id === offer.buyerOrgId);
+
       const newOrder: Order = {
         id: `ord-${Date.now()}`,
-        orderNumber: `ORD-202610-${String(ordersState.length + 1).padStart(3, '0')}`,
+        orderNumber,
         offerId: offer.id,
         buyerOrgId: offer.buyerOrgId,
-        buyerOrgName: 'Kigali Institutional Foods Ltd',
-        cropName: offer.lines[0]?.lotCode.includes('MZ') ? 'Maize' : 'Dry Beans',
-        grade: offer.lines[0]?.grade || QualityGrade.GRADE_A,
+        buyerOrgName: buyerOrg?.name || 'Kigali Institutional Foods Ltd',
+        cropName: offer.cropName || (offer.lines[0]?.lotCode.includes('MZ') ? 'Maize' : 'Dry Beans'),
+        grade: offer.grade || offer.lines[0]?.grade || QualityGrade.GRADE_A,
         totalQuantityKg: offer.totalQuantityKg,
         pricePerKgRwf: offer.averagePricePerKgRwf,
         subtotalRwf: offer.subtotalRwf,
         buyerFeeRwf: offer.platformFeeRwf,
         totalAmountRwf: offer.totalPriceRwf,
-        allocations: offer.lines.map((l, i) => ({
-          id: `alloc-${Date.now()}-${i}`,
-          lotId: l.lotId,
-          lotCode: l.lotCode,
-          supplierOrgId: l.supplierOrgId,
-          supplierOrgName: 'Twizamure Maize Cooperative',
-          quantityKg: l.quantityKg,
-          pricePerKgRwf: l.unitPriceRwf,
-          subtotalRwf: l.subtotalRwf,
-          supplierFeeRwf: Math.round((l.subtotalRwf * 3) / 100),
-          expectedSupplierPayoutRwf: l.subtotalRwf - Math.round((l.subtotalRwf * 3) / 100),
-          confirmedBySupplier: true,
-          confirmedAt: new Date().toISOString(),
-        })),
+        allocations: offer.lines.map((l, i) => {
+          const supplierOrg = organizationsState.find(o => o.id === l.supplierOrgId);
+          const supplierFeeCalc = calculateSupplierPayout(l.subtotalRwf);
+          return {
+            id: `alloc-${Date.now()}-${i}`,
+            lotId: l.lotId,
+            lotCode: l.lotCode,
+            supplierOrgId: l.supplierOrgId,
+            supplierOrgName: supplierOrg?.name || 'Partner Agricultural Cooperative',
+            quantityKg: l.quantityKg,
+            pricePerKgRwf: l.unitPriceRwf,
+            subtotalRwf: l.subtotalRwf,
+            supplierFeeRwf: supplierFeeCalc.supplierFeeRwf,
+            expectedSupplierPayoutRwf: supplierFeeCalc.netPayoutRwf,
+            confirmedBySupplier: true,
+            confirmedAt: new Date().toISOString(),
+          };
+        }),
         deliveryDistrict: offer.deliveryDistrict,
         deliverySector: 'Gisozi',
         deliveryAddress: 'Central Receiving Facility, Kigali',
@@ -832,6 +1042,11 @@ export const offerService = {
       };
 
       ordersState.unshift(newOrder);
+
+      // Create linked settlement records for suppliers (BR-04)
+      const settlements = createSettlementsFromOrder(newOrder);
+      settlementsState.push(...settlements);
+
       return offer;
     }
 
@@ -839,8 +1054,8 @@ export const offerService = {
       offer.status = OfferStatus.DECLINED;
       offer.negotiationTimeline.push({
         id: `neg-${Date.now()}`,
-        senderRole: UserRole.BUYER,
-        senderName: 'David (Buyer)',
+        senderRole: actorRole,
+        senderName: actor?.fullName || (actorRole === UserRole.SUPPLIER ? 'Supplier' : 'Buyer'),
         timestamp: new Date().toISOString(),
         action: 'DECLINE',
         notes: notes || 'Offer declined.',
@@ -852,8 +1067,8 @@ export const offerService = {
       offer.status = OfferStatus.COUNTERED;
       offer.negotiationTimeline.push({
         id: `neg-${Date.now()}`,
-        senderRole: UserRole.BUYER,
-        senderName: 'David (Buyer)',
+        senderRole: actorRole,
+        senderName: actor?.fullName || (actorRole === UserRole.SUPPLIER ? 'Supplier' : 'Buyer'),
         timestamp: new Date().toISOString(),
         action: 'COUNTER',
         notes: notes || 'Counter proposal submitted',
@@ -880,7 +1095,11 @@ export const orderService = {
     return ordersState;
   },
 
-  async simulatePayment(orderId: string, method: PaymentMethod): Promise<Order> {
+  async getOrderById(orderId: string): Promise<Order | undefined> {
+    return ordersState.find(o => o.id === orderId);
+  },
+
+  async simulatePayment(orderId: string, method: PaymentMethod, actor?: User): Promise<Order> {
     const order = ordersState.find(o => o.id === orderId);
     if (!order) throw new Error('Order not found');
 
@@ -891,7 +1110,10 @@ export const orderService = {
     // Realistic simulated payment confirmation into Cargo Escrow
     order.status = OrderStatus.PAID;
     order.paymentStatus = PaymentStatus.CONFIRMED;
-    order.paymentReference = method === PaymentMethod.MOBILE_MONEY ? `MOMO-RW-${Date.now().toString().slice(-6)}` : `BK-RW-${Date.now().toString().slice(-6)}`;
+    order.paymentReference =
+      method === PaymentMethod.MOBILE_MONEY
+        ? `MOMO-RW-${Date.now().toString().slice(-6)}`
+        : `BK-RW-${Date.now().toString().slice(-6)}`;
     order.paidAt = new Date().toISOString();
     order.updatedAt = new Date().toISOString();
 
@@ -916,6 +1138,10 @@ export const orderService = {
     if (!order) throw new Error('Order not found');
 
     // BR-03: Validate that payment is confirmed before dispatch can occur
+    if (order.paymentStatus !== PaymentStatus.CONFIRMED || order.status !== OrderStatus.PAID) {
+      throw new Error('Cannot dispatch order: Escrow payment is required before dispatch (BR-03)');
+    }
+
     const transitionCheck = validateOrderTransition(order, OrderStatus.DISPATCHED);
     if (!transitionCheck.success) {
       throw new Error(transitionCheck.error || 'Cannot dispatch order: Escrow payment is required before dispatch (BR-03)');
@@ -941,6 +1167,81 @@ export const orderService = {
     return order;
   },
 
+  async recordDelivery(orderId: string, actor: User, notes?: string): Promise<Order> {
+    const order = ordersState.find(o => o.id === orderId);
+    if (!order) throw new Error('Order not found');
+
+    const transitionCheck = validateOrderTransition(order, OrderStatus.DELIVERED);
+    if (!transitionCheck.success) {
+      throw new Error(transitionCheck.error || 'Cannot record delivery for this order');
+    }
+
+    order.status = OrderStatus.DELIVERED;
+    order.deliveredAt = new Date().toISOString();
+    order.updatedAt = new Date().toISOString();
+
+    notificationsState.unshift({
+      id: `ntf-${Date.now()}`,
+      userId: order.buyerOrgId,
+      type: NotificationType.ORDER,
+      titleEn: `Order Delivered: ${order.orderNumber}`,
+      titleRw: `Umusaruro Wageze Aho Woherejwe: ${order.orderNumber}`,
+      messageEn: `Order ${order.orderNumber} has arrived at destination. Please inspect and confirm receipt.`,
+      messageRw: `Ibikoresho by'ibwiriza ${order.orderNumber} byageze aho byoherejwe. Nyabuneka suzuma kandi wemeze.`,
+      isRead: false,
+      createdAt: new Date().toISOString(),
+    });
+
+    return order;
+  },
+
+  async acceptOrder(orderId: string, buyerUser: User): Promise<Order> {
+    const order = ordersState.find(o => o.id === orderId);
+    if (!order) throw new Error('Order not found');
+
+    const transitionCheck = validateOrderTransition(order, OrderStatus.ACCEPTED);
+    if (!transitionCheck.success) {
+      throw new Error(transitionCheck.error || 'Cannot accept order');
+    }
+
+    order.status = OrderStatus.ACCEPTED;
+    order.acceptedAt = new Date().toISOString();
+    order.updatedAt = new Date().toISOString();
+
+    // Acceptance triggers settlement eligibility (BR-04)
+    for (const stl of settlementsState.filter(s => s.orderId === order.id)) {
+      if (stl.status !== 'PAUSED') {
+        stl.status = 'ELIGIBLE';
+      }
+    }
+
+    // Mark lots as SOLD when reserved quantity is consumed
+    for (const alloc of order.allocations) {
+      const lot = lotsState.find(l => l.id === alloc.lotId);
+      if (lot) {
+        lot.reservedQuantityKg = Math.max(0, lot.reservedQuantityKg - alloc.quantityKg);
+        if (lot.remainingQuantityKg === 0 && lot.reservedQuantityKg === 0) {
+          lot.status = LotStatus.SOLD;
+        }
+        lot.updatedAt = new Date().toISOString();
+      }
+    }
+
+    notificationsState.unshift({
+      id: `ntf-${Date.now()}`,
+      userId: order.allocations[0]?.supplierOrgId || 'usr-supplier-01',
+      type: NotificationType.ORDER,
+      titleEn: `Delivery Accepted: ${order.orderNumber}`,
+      titleRw: `Umusaruro Wakiriwe Neza: ${order.orderNumber}`,
+      messageEn: `Buyer accepted delivery for order ${order.orderNumber}. Supplier payouts are now eligible for settlement.`,
+      messageRw: `Umuguzi yakiriye neza ibicuruzwa. Ubwishyu bwemerewe kwishyurwa koperative.`,
+      isRead: false,
+      createdAt: new Date().toISOString(),
+    });
+
+    return order;
+  },
+
   async recordDeliveryReceipt(
     orderId: string,
     buyerUserId: string,
@@ -956,15 +1257,26 @@ export const orderService = {
       throw new Error(`Cannot record delivery for order in ${order.status} status`);
     }
 
+    // If order was dispatched, mark delivery arrival
+    if (order.status === OrderStatus.DISPATCHED) {
+      order.deliveredAt = new Date().toISOString();
+    }
+
     if (action === 'DISPUTED') {
       order.status = OrderStatus.DISPUTED;
       order.hasActiveDispute = true;
       order.updatedAt = new Date().toISOString();
 
+      // BR-04: Active dispute strictly pauses settlement
+      for (const stl of settlementsState.filter(s => s.orderId === order.id)) {
+        stl.status = 'PAUSED';
+      }
+
       // Create linked dispute record
+      const disputeCode = `DSP-202610-${String(disputesState.length + 1).padStart(3, '0')}`;
       disputesState.unshift({
         id: `dsp-${Date.now()}`,
-        disputeCode: `DSP-202610-${String(disputesState.length + 1).padStart(3, '0')}`,
+        disputeCode,
         orderId: order.id,
         orderNumber: order.orderNumber,
         openedByUserId: buyerUserId,
@@ -985,17 +1297,21 @@ export const orderService = {
     order.acceptedAt = new Date().toISOString();
     order.updatedAt = new Date().toISOString();
 
-    // In demo flow, mark settled
-    order.status = OrderStatus.SETTLED;
+    for (const stl of settlementsState.filter(s => s.orderId === order.id)) {
+      if (stl.status !== 'PAUSED') {
+        stl.status = 'ELIGIBLE';
+      }
+    }
 
     // Mark constituent lots as SOLD
     for (const alloc of order.allocations) {
       const lot = lotsState.find(l => l.id === alloc.lotId);
       if (lot) {
-        lot.reservedQuantityKg -= alloc.quantityKg;
+        lot.reservedQuantityKg = Math.max(0, lot.reservedQuantityKg - alloc.quantityKg);
         if (lot.remainingQuantityKg === 0 && lot.reservedQuantityKg === 0) {
           lot.status = LotStatus.SOLD;
         }
+        lot.updatedAt = new Date().toISOString();
       }
     }
 
@@ -1021,6 +1337,12 @@ export const disputeService = {
 
     order.status = OrderStatus.DISPUTED;
     order.hasActiveDispute = true;
+    order.updatedAt = new Date().toISOString();
+
+    // Pause linked settlements (BR-04)
+    for (const stl of settlementsState.filter(s => s.orderId === order.id)) {
+      stl.status = 'PAUSED';
+    }
 
     const newDispute: Dispute = {
       id: `dsp-${Date.now()}`,
@@ -1040,6 +1362,79 @@ export const disputeService = {
     disputesState.unshift(newDispute);
     return newDispute;
   },
+
+  async resolveDispute(
+    disputeId: string,
+    adminUser: User,
+    outcome: DisputeOutcome,
+    notes?: string
+  ): Promise<Dispute> {
+    const dispute = disputesState.find(d => d.id === disputeId);
+    if (!dispute) throw new Error('Dispute not found');
+
+    if (adminUser.role !== UserRole.ADMINISTRATOR) {
+      throw new Error('Only Cargo Operations administrators can resolve trade disputes.');
+    }
+
+    dispute.status = DisputeStatus.RESOLVED;
+    dispute.outcome = outcome;
+    dispute.resolutionNotes = notes;
+    dispute.resolvedAt = new Date().toISOString();
+
+    const order = ordersState.find(o => o.id === dispute.orderId);
+    if (order) {
+      order.hasActiveDispute = false;
+      order.status = OrderStatus.ACCEPTED;
+      order.updatedAt = new Date().toISOString();
+
+      // Unpause settlements and make eligible
+      for (const stl of settlementsState.filter(s => s.orderId === order.id)) {
+        stl.status = 'ELIGIBLE';
+      }
+    }
+
+    return dispute;
+  },
+};
+
+// 6.1 Settlements & Payouts Service (BR-04)
+export const settlementService = {
+  async getSettlements(user?: User): Promise<SettlementRecord[]> {
+    if (!user) return settlementsState;
+    if (user.role === UserRole.SUPPLIER) {
+      return settlementsState.filter(s => s.supplierOrgId === user.organizationId);
+    }
+    return settlementsState;
+  },
+
+  async getSettlementByOrderId(orderId: string): Promise<SettlementRecord | undefined> {
+    return settlementsState.find(s => s.orderId === orderId);
+  },
+
+  async disburseSettlement(settlementId: string, adminUser: User): Promise<SettlementRecord> {
+    const settlement = settlementsState.find(s => s.id === settlementId);
+    if (!settlement) throw new Error('Settlement record not found');
+    const order = ordersState.find(o => o.id === settlement.orderId);
+    if (!order) throw new Error('Linked trade order not found');
+
+    const validation = validateSettlementDisbursement(settlement, order, adminUser.role);
+    if (!validation.success) {
+      throw new Error(validation.error);
+    }
+
+    settlement.status = 'SETTLED';
+    settlement.disbursedAt = new Date().toISOString();
+    settlement.disbursedBy = adminUser.id;
+
+    // Check if all settlements for this order have been disbursed
+    const orderSettlements = settlementsState.filter(s => s.orderId === order.id);
+    if (orderSettlements.every(s => s.status === 'SETTLED')) {
+      order.status = OrderStatus.SETTLED;
+      order.updatedAt = new Date().toISOString();
+    }
+
+    return settlement;
+  },
 };
 
 // 7. Offline Queue Synchronization Service
@@ -1058,8 +1453,9 @@ export const offlineQueueService = {
           if (lot) {
             lot.grade = gradingRecord.finalGrade;
             lot.gradedAt = gradingRecord.createdAt;
-            lot.status = LotStatus.VERIFIED;
-            lot.adminApprovedAt = new Date().toISOString();
+            lot.inspectedByAgentId = gradingRecord.fieldAgentId;
+            lot.updatedAt = new Date().toISOString();
+            // Note: Does NOT fabricate admin approval; remains pending admin review (BR-02)
           }
           if (
             gradingRecord &&
@@ -1085,3 +1481,4 @@ export const offlineQueueService = {
     return { syncedCount, errors };
   },
 };
+

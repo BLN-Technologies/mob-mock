@@ -168,6 +168,7 @@ export interface OfferLine {
   supplierOrgId: string;
   quantityKg: number;
   grade: QualityGrade;
+  cropName?: string;
   unitPriceRwf: number;
   subtotalRwf: number;
 }
@@ -187,6 +188,8 @@ export interface Offer {
   offerCode: string; // e.g. "OFF-202610-001"
   requestId?: string;
   buyerOrgId: string;
+  cropName?: string;
+  grade?: QualityGrade;
   lines: OfferLine[];
   totalQuantityKg: number;
   averagePricePerKgRwf: number;
@@ -201,6 +204,7 @@ export interface Offer {
   negotiationTimeline: NegotiationMessage[];
   expiresAt: string;
   createdAt: string;
+  updatedAt?: string;
 }
 
 export interface OrderAllocation {
@@ -296,6 +300,7 @@ export interface Dispute {
   status: DisputeStatus;
   outcome?: DisputeOutcome;
   adminDecisionNotes?: string;
+  resolutionNotes?: string;
   resolvedAt?: string;
   createdAt: string;
 }
@@ -325,6 +330,22 @@ export interface LedgerEntry {
   creditAccount: string;
   reference: string;
   notes: string;
+}
+
+export interface SettlementRecord {
+  id: string;
+  orderId: string;
+  orderNumber: string;
+  supplierOrgId: string;
+  supplierOrgName: string;
+  grossSubtotalRwf: number;
+  supplierFeeRwf: number; // 3% commercial fee
+  netPayoutRwf: number;   // 97% net payable to supplier cooperative
+  status: 'PENDING' | 'ELIGIBLE' | 'PAUSED' | 'SETTLED';
+  disbursedAt?: string;
+  disbursedBy?: string;
+  reference?: string;
+  createdAt: string;
 }
 
 export interface AppNotification {

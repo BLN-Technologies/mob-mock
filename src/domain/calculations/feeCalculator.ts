@@ -36,6 +36,17 @@ export function calculateBuyerTotal(
   };
 }
 
+export function calculateBuyerFee(
+  subtotalRwf: number,
+  feeSchedule: FeeSchedule = DEFAULT_FEE_SCHEDULE
+): { buyerFeeRwf: number; totalBuyerPayableRwf: number } {
+  const result = calculateBuyerTotal(subtotalRwf, feeSchedule);
+  return {
+    buyerFeeRwf: result.buyerFeeRwf,
+    totalBuyerPayableRwf: result.totalAmountRwf,
+  };
+}
+
 export function calculateSupplierPayout(
   allocationSubtotalRwf: number,
   feeSchedule: FeeSchedule = DEFAULT_FEE_SCHEDULE

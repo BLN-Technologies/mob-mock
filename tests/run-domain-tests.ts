@@ -8,13 +8,15 @@
 import { validateLotDeclaration } from '../src/domain/validation/lotValidation';
 import { isLotBuyerVisible, canTransitionLot, validateLotTransition } from '../src/domain/workflows/lotWorkflow';
 import { canTransitionOrder, validateOrderTransition } from '../src/domain/workflows/orderWorkflow';
+import { canTransitionOffer, validateOfferTransition, validateOfferStockAvailability } from '../src/domain/workflows/offerWorkflow';
+import { createSettlementsFromOrder, validateSettlementDisbursement } from '../src/domain/workflows/settlementWorkflow';
 import { calculateBuyerTotal, calculateSupplierPayout } from '../src/domain/calculations/feeCalculator';
 import { formatQuantity, formatRwf, calculateRemainingQuantity } from '../src/domain/calculations/lotCalculations';
 import { projectLotForBuyer, projectAllocationsForBuyer } from '../src/domain/projections/buyerProjections';
-import { LotStatus, OrderStatus, QualityGrade, PaymentStatus, UserRole, VerificationStatus } from '../src/domain/enums';
-import { Lot, Order, User, Organization, GradingRecord } from '../src/domain/models';
+import { LotStatus, OrderStatus, QualityGrade, PaymentStatus, UserRole, VerificationStatus, OfferStatus, DisputeStatus, DisputeOutcome, PaymentMethod } from '../src/domain/enums';
+import { Lot, Order, User, Organization, GradingRecord, Offer, SettlementRecord, Dispute } from '../src/domain/models';
 import { resolveAuthenticatedRoute, canAccessDestination } from '../src/core/navigation/routingPolicy';
-import { authService, normalizeRwandanPhone, isValidEmail, mockState } from '../src/services/mock/mockServices';
+import { authService, normalizeRwandanPhone, isValidEmail, mockState, lotService, gradingService, adminApprovalService, offerService, orderService, disputeService, settlementService } from '../src/services/mock/mockServices';
 
 declare const process: any;
 
@@ -743,6 +745,480 @@ async function runAllTests() {
     });
     assert(updated.fullName === 'Updated Cooperative Lead', 'Updates profile full name');
     assert(updated.preferredLanguage === 'en', 'Updates preferred language');
+  }
+
+  function createTestUser(overrides: Partial<User> & { id: string; role: UserRole; organizationId: string }): User {
+    return {
+      fullName: 'Test User',
+      phone: '+250788111222',
+      email: 'test@cargo.rw',
+      preferredLanguage: 'en',
+      isActive: true,
+      isLocked: false,
+      failedLoginAttempts: 0,
+      onboardingCompleted: true,
+      verificationStatus: VerificationStatus.VERIFIED,
+      createdAt: new Date().toISOString(),
+      ...overrides,
+    };
+  }
+
+  // 13. Phase 3: Administrative Approval & Buyer Visibility Decoupling (BR-02)
+  console.log('\n[Suite 13: Administrative Approval & Buyer Visibility Decoupling (BR-02)]');
+  {
+    await mockState.resetAll();
+
+    const supplierUser = createTestUser({
+      id: 'usr-sup-test-p3',
+      fullName: 'Jean Bosco Test',
+      phone: '+250788111222',
+      email: 'jean@coop.rw',
+      role: UserRole.SUPPLIER,
+      organizationId: 'org-supplier-01',
+    });
+
+    const agentUser = createTestUser({
+      id: 'usr-agent-test-p3',
+      fullName: 'Patrick Gasore Inspector',
+      phone: '+250788333444',
+      email: 'patrick@cargo.rw',
+      role: UserRole.FIELD_AGENT,
+      organizationId: 'org-cargo-rw',
+      agentAssignment: {
+        district: 'Nyagatare',
+        sector: 'Karangazi',
+        supervisorName: 'Cargo Agronomy Operations',
+      },
+    });
+
+    const adminUser = createTestUser({
+      id: 'usr-admin-p3',
+      fullName: 'Cargo Ops Administrator',
+      phone: '+250788000111',
+      email: 'ops@cargo.rw',
+      role: UserRole.ADMINISTRATOR,
+      organizationId: 'org-cargo-admin',
+    });
+
+    // 1. Supplier creates harvest lot
+    const lot = await lotService.createLot({
+      cropName: 'Maize',
+      variety: 'Nyirakaragaza (White)',
+      totalQuantityKg: 12000,
+      pricePerKgRwf: 410,
+      harvestDate: '2026-10-01',
+      availabilityDate: '2026-10-15',
+      pickupDistrict: 'Nyagatare',
+      pickupSector: 'Karangazi',
+      pickupLocationDetails: 'Solar Silo 3, Karangazi Agro Facility',
+      harvestConfirmed: true,
+      photos: ['https://example.com/photo1.jpg'],
+    }, supplierUser);
+
+    assert(lot.status === LotStatus.SUBMITTED, 'Declared lot starts in SUBMITTED state');
+    assert(!isLotBuyerVisible(lot), 'Declared lot is NOT visible in buyer catalogue (BR-02)');
+
+    // 2. Field Agent inspects lot
+    const grading = await gradingService.submitGrading(
+      lot.id,
+      agentUser,
+      { moisture: 13.0, foreignMatter: 0.9, defects: 1.8 },
+      ['https://example.com/inspection.jpg'],
+      'High grade grain, moisture optimal'
+    );
+
+    assert(grading.finalGrade === QualityGrade.GRADE_A, 'Calculates Grade A based on threshold criteria');
+    assert(lot.grade === QualityGrade.GRADE_A, 'Lot record reflects assigned QualityGrade');
+    assert(lot.inspectedByAgentId === agentUser.id, 'Lot references authorized field inspector');
+    assert(!lot.adminApprovedAt, 'Inspection does NOT fabricate administrative approval (BR-02 decoupled)');
+    assert(!isLotBuyerVisible(lot), 'Graded lot without admin approval remains invisible to buyers');
+
+    // Safe denial on direct buyer retrieval
+    const directBuyerFetch = await lotService.getBuyerLotById(lot.id);
+    assert(directBuyerFetch === undefined, 'Direct buyer fetch of unapproved lot safely returns undefined');
+
+    // Pending lots query for admin operations
+    const pendingReviewLots = await adminApprovalService.getPendingLots();
+    assert(pendingReviewLots.some(l => l.id === lot.id), 'Graded lot appears in administrative review queue');
+
+    // Non-admin cannot approve lot
+    try {
+      await adminApprovalService.approveLot(lot.id, supplierUser);
+      assert(false, 'Should reject approval by non-administrator');
+    } catch (err: any) {
+      assert(err.message.includes('Only an authorized Cargo Administrator'), 'Guards admin approval authorization');
+    }
+
+    // Authorized admin approves lot
+    const approvedLot = await adminApprovalService.approveLot(lot.id, adminUser);
+    assert(approvedLot.status === LotStatus.VERIFIED, 'Transitions lot to VERIFIED upon admin approval');
+    assert(!!approvedLot.adminApprovedAt, 'Records administrative verification timestamp');
+    assert(isLotBuyerVisible(approvedLot), 'Lot is now visible to buyers after grading AND admin verification (BR-02)');
+
+    // Now direct buyer fetch succeeds with privacy projection
+    const buyerLot = await lotService.getBuyerLotById(lot.id);
+    assert(buyerLot !== undefined, 'Direct buyer fetch succeeds for approved lot');
+    assert((buyerLot as any).supplierId === undefined, 'Privacy: Strips supplierId from buyer view (BR-05)');
+    assert((buyerLot as any).pickupLocationDetails === undefined, 'Privacy: Strips private warehouse details (BR-05)');
+    assert(buyerLot?.district === 'Nyagatare', 'Retains regional district for logistics planning');
+  }
+
+  // 14. Phase 3: Buyer Offer Negotiation, Atomic Stock Reservation & Order Creation
+  console.log('\n[Suite 14: Buyer Offer Negotiation, Atomic Stock Reservation & Order Confirmation]');
+  {
+    const buyerUser = createTestUser({
+      id: 'usr-buyer-p3',
+      fullName: 'David Gasana Buyer',
+      phone: '+250788555666',
+      email: 'david@kigalifoods.rw',
+      role: UserRole.BUYER,
+      organizationId: 'org-buyer-01',
+    });
+
+    const supplierUser = createTestUser({
+      id: 'usr-supplier-01',
+      fullName: 'Twizamure Cooperative Lead',
+      phone: '+250788111222',
+      email: 'twizamure@coop.rw',
+      role: UserRole.SUPPLIER,
+      organizationId: 'org-supplier-01',
+    });
+
+    // Use seed lot lot-001 (Maize, 15,000 kg, verified and approved)
+    const seedLot = (await lotService.getLotById('lot-001'))!;
+    assert(seedLot && isLotBuyerVisible(seedLot), 'Seed lot-001 is active and buyer-visible');
+
+    // Reject offer exceeding available quantity
+    try {
+      await offerService.createOffer(buyerUser, {
+        lotId: seedLot.id,
+        quantityKg: 20000, // available is 15000
+        deliveryDistrict: 'Kigali (Gasabo)',
+        deliveryDate: '2026-10-25',
+      });
+      assert(false, 'Should reject offer exceeding available quantity');
+    } catch (err: any) {
+      assert(err.message.includes('exceeds remaining available stock'), 'Rejects offer exceeding remaining lot quantity');
+    }
+
+    // Reject non-buyer creating offer
+    try {
+      await offerService.createOffer(supplierUser, {
+        lotId: seedLot.id,
+        quantityKg: 5000,
+        deliveryDistrict: 'Kigali (Gasabo)',
+        deliveryDate: '2026-10-25',
+      });
+      assert(false, 'Should reject offer created by supplier');
+    } catch (err: any) {
+      assert(err.message.includes('Only authorized institutional buyers'), 'Guards offer creation role permissions');
+    }
+
+    // Buyer creates valid purchase offer
+    const offer = await offerService.createOffer(buyerUser, {
+      lotId: seedLot.id,
+      quantityKg: 6000,
+      unitPriceRwf: 400,
+      deliveryDistrict: 'Kigali (Gasabo)',
+      deliveryDate: '2026-10-25',
+      notes: 'Initial institutional procurement offer',
+    });
+
+    assert(offer.status === OfferStatus.PROPOSED, 'Offer created in PROPOSED status');
+    assert(offer.subtotalRwf === 2400000, 'Subtotal is 6000 kg * 400 RWF = 2,400,000 RWF');
+    assert(offer.platformFeeRwf === 120000, '5% Buyer platform fee is 120,000 RWF (BR-04)');
+    assert(offer.totalPriceRwf === 2520000, 'Total buyer payable is 2,520,000 RWF (subtotal + fee)');
+
+    // Supplier counters offer price
+    const counteredOffer = await offerService.respondToOffer(
+      offer.id,
+      'COUNTER',
+      'Can meet at 415 RWF/kg for premium Grade A',
+      415,
+      supplierUser
+    );
+    assert(counteredOffer.status === OfferStatus.COUNTERED, 'Transitions offer to COUNTERED status');
+    assert(counteredOffer.negotiationTimeline.length === 2, 'Timeline records proposal and counteroffer entries');
+
+    // Buyer accepts counteroffer
+    const initialRemaining = seedLot.remainingQuantityKg;
+    const initialReserved = seedLot.reservedQuantityKg;
+
+    const acceptedOffer = await offerService.respondToOffer(
+      offer.id,
+      'ACCEPT',
+      'Agreed at 415 RWF/kg',
+      undefined,
+      buyerUser
+    );
+
+    assert(acceptedOffer.status === OfferStatus.ACCEPTED, 'Transitions offer to ACCEPTED');
+    assert(seedLot.remainingQuantityKg === initialRemaining - 6000, 'Atomically decrements remaining lot quantity');
+    assert(seedLot.reservedQuantityKg === initialReserved + 6000, 'Atomically increments reserved lot quantity');
+
+    // Confirm that Order was automatically generated
+    const orders = await orderService.getOrders(buyerUser);
+    const linkedOrder = orders.find(o => o.offerId === offer.id);
+    assert(linkedOrder !== undefined, 'Automatically creates linked Order from accepted offer (FR-ORD-01)');
+    assert(linkedOrder?.status === OrderStatus.CONFIRMED, 'Generated order starts in CONFIRMED state');
+    assert(linkedOrder?.paymentStatus === PaymentStatus.PENDING, 'Generated order payment is initially PENDING');
+
+    // Confirm that linked SettlementRecord was automatically generated
+    const settlements = await settlementService.getSettlements();
+    const linkedSettlement = settlements.find(s => s.orderId === linkedOrder?.id);
+    assert(linkedSettlement !== undefined, 'Automatically creates linked settlement record for suppliers (BR-04)');
+    assert(linkedSettlement?.status === 'PENDING', 'Settlement record starts in PENDING status before delivery');
+    assert(linkedSettlement?.supplierFeeRwf === Math.round((linkedOrder!.subtotalRwf * 3) / 100), 'Calculates 3% supplier fee on gross subtotal');
+    assert(linkedSettlement!.supplierFeeRwf + linkedSettlement!.netPayoutRwf === linkedOrder!.subtotalRwf, 'Preserves fee + payout === gross subtotal invariant');
+  }
+
+  // 15. Phase 3: Payment Gate (BR-03), Delivery Receipts & Dispute Settlement Holds (BR-04)
+  console.log('\n[Suite 15: Payment Gate (BR-03), Delivery Receipts & Dispute Settlement Holds (BR-04)]');
+  {
+    const buyerUser = createTestUser({
+      id: 'usr-buyer-01',
+      fullName: 'David Gasana',
+      phone: '+250788555666',
+      email: 'david@buyer.rw',
+      role: UserRole.BUYER,
+      organizationId: 'org-buyer-01',
+    });
+
+    const supplierUser = createTestUser({
+      id: 'usr-supplier-01',
+      fullName: 'Twizamure Cooperative Lead',
+      phone: '+250788111222',
+      email: 'twizamure@coop.rw',
+      role: UserRole.SUPPLIER,
+      organizationId: 'org-supplier-01',
+    });
+
+    const adminUser = createTestUser({
+      id: 'usr-admin-p3',
+      fullName: 'Cargo Ops Administrator',
+      phone: '+250788000111',
+      email: 'ops@cargo.rw',
+      role: UserRole.ADMINISTRATOR,
+      organizationId: 'org-cargo-admin',
+    });
+
+    // Find seed order ord-001 (CONFIRMED, payment PENDING)
+    const order01 = (await orderService.getOrderById('ord-001'))!;
+    assert(order01.status === OrderStatus.CONFIRMED && order01.paymentStatus === PaymentStatus.PENDING, 'Order ord-001 is pending payment');
+
+    // 1. Strict Payment Gate (BR-03): Attempting dispatch while payment is pending must fail
+    try {
+      await orderService.dispatchOrder(order01.id, supplierUser);
+      assert(false, 'Should reject dispatch of unpaid order');
+    } catch (err: any) {
+      assert(err.message.includes('Escrow payment is required before dispatch (BR-03)'), 'Rejects dispatch when escrow payment unconfirmed (BR-03)');
+    }
+
+    // 2. Simulate Buyer Mobile Money Payment
+    const paidOrder = await orderService.simulatePayment(order01.id, PaymentMethod.MOBILE_MONEY, buyerUser);
+    assert(paidOrder.status === OrderStatus.PAID, 'Transitions order to PAID status');
+    assert(paidOrder.paymentStatus === PaymentStatus.CONFIRMED, 'Marks paymentStatus as CONFIRMED in escrow');
+    assert(!!paidOrder.paymentReference, 'Generates realistic escrow payment reference');
+
+    // 3. Dispatch is now authorized
+    const dispatchedOrder = await orderService.dispatchOrder(order01.id, supplierUser);
+    assert(dispatchedOrder.status === OrderStatus.DISPATCHED, 'Transitions order to DISPATCHED once paid');
+    assert(!!dispatchedOrder.dispatchedAt, 'Records dispatch timestamp');
+
+    // 4. Delivery arrival
+    const deliveredOrder = await orderService.recordDelivery(order01.id, supplierUser, 'Delivered at Central Silos');
+    assert(deliveredOrder.status === OrderStatus.DELIVERED, 'Transitions order to DELIVERED');
+
+    // 5. Buyer triggers quality dispute on delivered shipment
+    const disputedOrder = await orderService.recordDeliveryReceipt(
+      deliveredOrder.id,
+      buyerUser.id,
+      14000,
+      QualityGrade.GRADE_B,
+      'DISPUTED',
+      'Moisture test at receiving was 15.2% (exceeds Grade A threshold)'
+    );
+
+    assert(disputedOrder.status === OrderStatus.DISPUTED, 'Transitions order to DISPUTED');
+    assert(disputedOrder.hasActiveDispute === true, 'Sets hasActiveDispute flag on order');
+
+    // 6. Dispute Hold Invariant (BR-04): Linked settlements are strictly PAUSED
+    const settlements = await settlementService.getSettlements();
+    const orderSettlement = settlements.find(s => s.orderId === disputedOrder.id);
+    assert(orderSettlement !== undefined, 'Linked settlement record exists');
+    assert(orderSettlement?.status === 'PAUSED', 'Active dispute strictly pauses settlement disbursement (BR-04)');
+
+    // Attempting to disburse paused settlement must fail
+    try {
+      await settlementService.disburseSettlement(orderSettlement!.id, adminUser);
+      assert(false, 'Should reject disbursement of paused settlement');
+    } catch (err: any) {
+      assert(err.message.includes('active trade dispute is unresolved'), 'Rejects disbursement during active dispute hold (BR-04)');
+    }
+
+    // 7. Operations Admin adjudicates dispute
+    const openDisputes = await disputeService.getDisputes(adminUser);
+    const orderDispute = openDisputes.find(d => d.orderId === disputedOrder.id)!;
+    assert(orderDispute !== undefined, 'Dispute record found in operations dispute register');
+
+    const resolvedDispute = await disputeService.resolveDispute(
+      orderDispute.id,
+      adminUser,
+      DisputeOutcome.ADJUSTED_PAYOUT,
+      'Settled with 2% allowance agreed by cooperative'
+    );
+
+    assert(resolvedDispute.status === DisputeStatus.RESOLVED, 'Marks dispute as RESOLVED');
+    assert(disputedOrder.hasActiveDispute === false, 'Clears hasActiveDispute flag on order');
+    assert(disputedOrder.status === OrderStatus.ACCEPTED, 'Transitions order to ACCEPTED upon resolution');
+    assert(orderSettlement?.status === 'ELIGIBLE', 'Unpauses settlement and marks it ELIGIBLE for payout');
+
+    // 8. Admin disburses eligible settlement
+    const disbursed = await settlementService.disburseSettlement(orderSettlement!.id, adminUser);
+    assert(disbursed.status === 'SETTLED', 'Disburses settlement and marks status SETTLED');
+    assert(!!disbursed.disbursedAt, 'Records disbursement timestamp');
+    assert(disputedOrder.status === OrderStatus.SETTLED, 'Transitions order to SETTLED once all payouts complete');
+  }
+
+  // 16. Phase 3: Complete End-to-End Multi-Party Agricultural Trading Lifecycle Scenario
+  console.log('\n[Suite 16: Complete End-to-End Multi-Party Trading Lifecycle Scenario]');
+  {
+    await mockState.resetAll();
+
+    const supplier = createTestUser({
+      id: 'usr-sup-e2e',
+      fullName: 'Cooperative Tuzamurane Rep',
+      phone: '+250788777888',
+      email: 'tuzamurane@agri.rw',
+      role: UserRole.SUPPLIER,
+      organizationId: 'org-supplier-05',
+    });
+
+    const inspector = createTestUser({
+      id: 'usr-agent-e2e',
+      fullName: 'Ines Uwase Inspector',
+      phone: '+250788333222',
+      email: 'ines@cargo.rw',
+      role: UserRole.FIELD_AGENT,
+      organizationId: 'org-cargo-ops',
+      agentAssignment: {
+        district: 'Nyagatare',
+        sector: 'Karangazi',
+        supervisorName: 'Cargo Agronomy Operations',
+      },
+    });
+
+    const admin = createTestUser({
+      id: 'usr-admin-e2e',
+      fullName: 'Cargo Central Operations',
+      phone: '+250788000999',
+      email: 'ops@cargo.rw',
+      role: UserRole.ADMINISTRATOR,
+      organizationId: 'org-cargo-admin',
+    });
+
+    const buyer = createTestUser({
+      id: 'usr-buyer-e2e',
+      fullName: 'Rwanda Grain Processors Ltd Buyer',
+      phone: '+250788444555',
+      email: 'procurement@rwandagrain.rw',
+      role: UserRole.BUYER,
+      organizationId: 'org-buyer-01',
+    });
+
+    // Step 1: Supplier declares 10,000 kg harvest lot
+    const newLot = await lotService.createLot({
+      cropName: 'Maize',
+      variety: 'Nyirakaragaza (White)',
+      totalQuantityKg: 10000,
+      pricePerKgRwf: 450,
+      harvestDate: '2026-10-02',
+      availabilityDate: '2026-10-18',
+      pickupDistrict: 'Nyagatare',
+      pickupSector: 'Karangazi',
+      pickupLocationDetails: 'Warehouse Bay 4, Karangazi Agro Hub',
+      harvestConfirmed: true,
+      photos: ['https://example.com/maize-lot.jpg'],
+    }, supplier);
+
+    assert(newLot.status === LotStatus.SUBMITTED, 'Step 1: Supplier declares lot in SUBMITTED status');
+
+    // Step 2: Field agent inspects and records quality measurements
+    const grading = await gradingService.submitGrading(
+      newLot.id,
+      inspector,
+      { moisture: 12.8, foreignMatter: 0.6, defects: 1.2 },
+      ['https://example.com/inspection-photos.jpg'],
+      'Grade A certified'
+    );
+    assert(grading.finalGrade === QualityGrade.GRADE_A, 'Step 2: Inspector records measurements -> Grade A calculated');
+    assert(!isLotBuyerVisible(newLot), 'Step 2: Lot remains invisible to buyers pending admin approval (BR-02)');
+
+    // Step 3: Administrator reviews and approves lot
+    const verifiedLot = await adminApprovalService.approveLot(newLot.id, admin);
+    assert(verifiedLot.status === LotStatus.VERIFIED, 'Step 3: Administrator approves lot -> VERIFIED');
+    assert(isLotBuyerVisible(verifiedLot), 'Step 3: Lot is now live in Buyer Discover catalogue');
+
+    // Step 4: Buyer discovers lot and submits offer for 4,000 kg
+    const offer = await offerService.createOffer(buyer, {
+      lotId: verifiedLot.id,
+      quantityKg: 4000,
+      unitPriceRwf: 450,
+      deliveryDistrict: 'Kigali (Gasabo)',
+      deliveryDate: '2026-10-26',
+      notes: 'Commercial procurement for processing plant',
+    });
+    assert(offer.status === OfferStatus.PROPOSED, 'Step 4: Buyer creates purchase offer (4,000 kg @ 450 RWF/kg)');
+    assert(offer.subtotalRwf === 1800000, 'Step 4: Subtotal is 1,800,000 RWF');
+    assert(offer.platformFeeRwf === 90000, 'Step 4: 5% Buyer platform fee is 90,000 RWF');
+    assert(offer.totalPriceRwf === 1890000, 'Step 4: Total payable in escrow is 1,890,000 RWF');
+
+    // Step 5: Supplier accepts offer -> Atomic stock reservation and Order creation
+    await offerService.respondToOffer(offer.id, 'ACCEPT', 'Offer accepted', undefined, supplier);
+    assert(verifiedLot.remainingQuantityKg === 6000, 'Step 5: Lot remaining stock reduced to 6,000 kg');
+    assert(verifiedLot.reservedQuantityKg === 4000, 'Step 5: Lot reserved quantity increased to 4,000 kg');
+
+    const orders = await orderService.getOrders(buyer);
+    const order = orders.find(o => o.offerId === offer.id)!;
+    assert(order !== undefined && order.status === OrderStatus.CONFIRMED, 'Step 5: Order automatically created in CONFIRMED state');
+
+    // Step 6: Payment gate enforces escrow before dispatch
+    try {
+      await orderService.dispatchOrder(order.id, supplier);
+      assert(false, 'Should fail dispatch before payment');
+    } catch (err: any) {
+      assert(err.message.includes('Escrow payment is required before dispatch (BR-03)'), 'Step 6: Dispatch blocked before payment (BR-03 gate)');
+    }
+
+    // Step 7: Buyer confirms payment into escrow
+    await orderService.simulatePayment(order.id, PaymentMethod.MOBILE_MONEY, buyer);
+    assert(order.status === OrderStatus.PAID && order.paymentStatus === PaymentStatus.CONFIRMED, 'Step 7: Payment confirmed in escrow -> Order PAID');
+
+    // Step 8: Supplier dispatches shipment
+    await orderService.dispatchOrder(order.id, supplier);
+    assert(order.status === OrderStatus.DISPATCHED, 'Step 8: Supplier dispatches consignment -> Order DISPATCHED');
+
+    // Step 9: Logistics delivery arrival
+    await orderService.recordDelivery(order.id, supplier, 'Arrived at Kigali processing hub');
+    assert(order.status === OrderStatus.DELIVERED, 'Step 9: Consignment arrives at warehouse -> Order DELIVERED');
+
+    // Step 10: Buyer inspects and accepts delivery
+    await orderService.acceptOrder(order.id, buyer);
+    assert(order.status === OrderStatus.ACCEPTED, 'Step 10: Buyer accepts delivery -> Order ACCEPTED');
+
+    // Step 11: Settlement eligibility and financial invariants
+    const settlements = await settlementService.getSettlements(supplier);
+    const orderStl = settlements.find(s => s.orderId === order.id)!;
+    assert(orderStl !== undefined && orderStl.status === 'ELIGIBLE', 'Step 11: Supplier settlement status transitions to ELIGIBLE');
+    assert(orderStl.grossSubtotalRwf === 1800000, 'Step 11: Gross trade value is 1,800,000 RWF');
+    assert(orderStl.supplierFeeRwf === 54000, 'Step 11: 3% Supplier fee is exactly 54,000 RWF');
+    assert(orderStl.netPayoutRwf === 1746000, 'Step 11: Net supplier payout is 1,746,000 RWF');
+    assert(orderStl.supplierFeeRwf + orderStl.netPayoutRwf === orderStl.grossSubtotalRwf, 'Step 11: Gross value invariant 54,000 + 1,746,000 === 1,800,000 RWF holds');
+
+    // Step 12: Operations Admin disburses settlement funds
+    await settlementService.disburseSettlement(orderStl.id, admin);
+    assert(orderStl.status === 'SETTLED', 'Step 12: Settlement payout completed -> Status SETTLED');
+    assert(order.status === OrderStatus.SETTLED, 'Step 12: Order lifecycle successfully fulfilled -> Status SETTLED');
   }
 
   console.log(`\n========================================`);
