@@ -86,6 +86,9 @@ export interface BuyerLotProjection {
   grade: QualityGrade;
   availabilityDate: string;
   district: string;
+  sector?: string;
+  harvestDate?: string;
+  notes?: string;
   photos: string[];
   status: LotStatus;
   verifiedAt: string;

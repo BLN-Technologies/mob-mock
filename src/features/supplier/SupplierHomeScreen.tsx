@@ -115,7 +115,7 @@ export const SupplierHomeScreen: React.FC<SupplierHomeScreenProps> = ({
         {/* Primary Action Button */}
         <View style={styles.actionContainer}>
           <Button
-            title={t.supplier.createNewLot}
+            title={t.supplier.declare}
             onPress={onNavigateToCreateLot}
             size="large"
             icon={<Ionicons name="add-circle" size={22} color="#FFFFFF" />}

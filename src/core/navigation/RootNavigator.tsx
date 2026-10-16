@@ -124,7 +124,7 @@ export const RootNavigator: React.FC = () => {
       return (
         <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right']}>
           <TopAppBar
-            title={t.supplier.createNewLot}
+            title={t.supplier.declareHarvestTitle}
             showBack
             onBack={() => setShowCreateLot(false)}
           />

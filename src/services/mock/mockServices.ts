@@ -176,13 +176,68 @@ export const lotService = {
     return newLot;
   },
 
-  async getBuyerCatalogue(cropFilter?: string, gradeFilter?: string): Promise<BuyerLotProjection[]> {
+  async getBuyerCatalogue(
+    cropFilter?: string,
+    gradeFilter?: string,
+    districtFilter?: string,
+    searchQuery?: string,
+    categoryFilter?: string,
+    sortBy?: string
+  ): Promise<BuyerLotProjection[]> {
     // BR-02: ONLY lots that are verified and approved by admin & graded by agent
-    return lotsState
-      .filter(l => isLotBuyerVisible(l))
-      .filter(l => (!cropFilter || cropFilter === 'All' ? true : l.cropName.toLowerCase() === cropFilter.toLowerCase()))
-      .filter(l => (!gradeFilter || gradeFilter === 'All' ? true : l.grade === gradeFilter))
-      .map(l => projectLotForBuyer(l));
+    let filtered = lotsState.filter(l => isLotBuyerVisible(l));
+
+    if (cropFilter && cropFilter !== 'All' && cropFilter !== 'ALL') {
+      filtered = filtered.filter(l => l.cropName.toLowerCase() === cropFilter.toLowerCase());
+    }
+
+    if (gradeFilter && gradeFilter !== 'All' && gradeFilter !== 'ALL') {
+      filtered = filtered.filter(l => l.grade === gradeFilter);
+    }
+
+    if (districtFilter && districtFilter !== 'All' && districtFilter !== 'ALL') {
+      filtered = filtered.filter(l => l.pickupDistrict.toLowerCase() === districtFilter.toLowerCase());
+    }
+
+    if (categoryFilter && categoryFilter !== 'ALL') {
+      const cat = categoryFilter.toUpperCase();
+      filtered = filtered.filter(l => {
+        const name = l.cropName.toLowerCase();
+        if (cat === 'GRAINS') return name.includes('maize') || name.includes('rice') || name.includes('wheat') || name.includes('corn');
+        if (cat === 'LEGUMES') return name.includes('bean') || name.includes('soy') || name.includes('peas');
+        if (cat === 'ROOTS') return name.includes('potato') || name.includes('cassava');
+        if (cat === 'VEGETABLES') return name.includes('tomato') || name.includes('onion') || name.includes('pepper') || name.includes('cabbage');
+        if (cat === 'FRUITS') return name.includes('avocado') || name.includes('banana') || name.includes('mango');
+        if (cat === 'CASH_CROPS') return name.includes('coffee') || name.includes('tea');
+        return true;
+      });
+    }
+
+    if (searchQuery && searchQuery.trim().length > 0) {
+      const q = searchQuery.trim().toLowerCase();
+      filtered = filtered.filter(l => {
+        return (
+          l.cropName.toLowerCase().includes(q) ||
+          (l.variety && l.variety.toLowerCase().includes(q)) ||
+          l.pickupDistrict.toLowerCase().includes(q) ||
+          l.pickupSector.toLowerCase().includes(q) ||
+          l.lotCode.toLowerCase().includes(q)
+        );
+      });
+    }
+
+    if (sortBy === 'PRICE_ASC') {
+      filtered.sort((a, b) => a.pricePerKgRwf - b.pricePerKgRwf);
+    } else if (sortBy === 'PRICE_DESC') {
+      filtered.sort((a, b) => b.pricePerKgRwf - a.pricePerKgRwf);
+    } else if (sortBy === 'QTY_DESC') {
+      filtered.sort((a, b) => b.remainingQuantityKg - a.remainingQuantityKg);
+    } else {
+      // Default: NEWEST
+      filtered.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    }
+
+    return filtered.map(l => projectLotForBuyer(l));
   },
 };
 

@@ -87,16 +87,21 @@ export const LotListScreen: React.FC<LotListScreenProps> = ({
         {/* Top Summary Banner */}
         <View style={styles.summaryCard}>
           <View style={styles.summaryTop}>
-            <View>
+            <View style={styles.summaryTitleWrap}>
               <Text style={styles.title}>{t.supplier.declaredLots}</Text>
               <Text style={styles.subtitle}>{t.supplier.lotsSubtitle}</Text>
             </View>
-            <Button
-              title={t.supplier.createNewLot}
+            <TouchableOpacity
               onPress={onNavigateToCreateLot}
-              size="small"
-              icon={<Ionicons name="add" size={16} color="#FFFFFF" />}
-            />
+              activeOpacity={0.75}
+              accessibilityRole="button"
+              accessibilityLabel={t.supplier.declare}
+              accessibilityHint={t.supplier.declareHint}
+              style={styles.declareBtn}
+            >
+              <Ionicons name="add" size={17} color="#FFFFFF" style={styles.declareIcon} />
+              <Text style={styles.declareBtnText}>{t.supplier.declare}</Text>
+            </TouchableOpacity>
           </View>
 
           <View style={styles.summaryStatsRow}>
@@ -164,7 +169,7 @@ export const LotListScreen: React.FC<LotListScreenProps> = ({
             icon="leaf-outline"
             title={t.supplier.noLotsFound}
             description={t.supplier.noLotsDesc}
-            actionTitle={t.supplier.createNewLot}
+            actionTitle={t.supplier.declare}
             onActionPress={onNavigateToCreateLot}
           />
         ) : (
@@ -251,9 +256,13 @@ const styles = StyleSheet.create({
   summaryTop: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'flex-start',
+    alignItems: 'center',
     marginBottom: spacing.md,
     gap: spacing.sm,
+  },
+  summaryTitleWrap: {
+    flex: 1,
+    paddingRight: spacing.xs,
   },
   title: {
     ...typography.h2,
@@ -264,7 +273,27 @@ const styles = StyleSheet.create({
     ...typography.caption,
     color: colors.neutralGray,
     marginTop: 2,
-    maxWidth: 220,
+    lineHeight: 16,
+  },
+  declareBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.primary,
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+    borderRadius: radii.md,
+    minHeight: 38,
+    ...shadows.sm,
+  },
+  declareIcon: {
+    marginRight: 4,
+  },
+  declareBtnText: {
+    ...typography.bodyMedium,
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#FFFFFF',
   },
   summaryStatsRow: {
     flexDirection: 'row',

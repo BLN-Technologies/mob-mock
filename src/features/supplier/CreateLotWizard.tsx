@@ -26,9 +26,13 @@ interface CreateLotWizardProps {
 const COMMON_CROPS = [
   { name: 'Maize', variety: 'Nyirakaragaza' },
   { name: 'Dry Beans', variety: 'Yellow Beans' },
-  { name: 'Rice', variety: 'Kigori / Basmati' },
-  { name: 'Soybeans', variety: 'Sopetrad' },
   { name: 'Irish Potatoes', variety: 'Kinigi' },
+  { name: 'Fresh Tomatoes', variety: 'Anna F1' },
+  { name: 'Rice', variety: 'Kigori / Basmati' },
+  { name: 'Hass Avocados', variety: 'Export Grade' },
+  { name: 'Cooking Bananas', variety: 'Injagi' },
+  { name: 'Red Onions', variety: 'Red Creole' },
+  { name: 'Soybeans', variety: 'Sopetrad' },
   { name: 'Coffee', variety: 'Arabica' },
 ];
 

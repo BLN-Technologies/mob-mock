@@ -16,7 +16,7 @@ export const CropBadge: React.FC<CropBadgeProps> = ({
 }) => {
   const getCropMeta = (name: string) => {
     const lower = (name || '').toLowerCase();
-    if (lower.includes('maize') || lower.includes('igitoki') || lower.includes('corn')) {
+    if (lower.includes('maize') || lower.includes('corn') || lower.includes('ikigori')) {
       return {
         icon: 'nutrition-outline' as const,
         bg: '#FEF3C7',
@@ -32,12 +32,52 @@ export const CropBadge: React.FC<CropBadgeProps> = ({
         label: 'Beans',
       };
     }
+    if (lower.includes('tomato') || lower.includes('inyanya')) {
+      return {
+        icon: 'radio-button-on' as const,
+        bg: '#FEE2E2',
+        color: '#E11D48',
+        label: 'Tomatoes',
+      };
+    }
+    if (lower.includes('potato') || lower.includes('ibirayi')) {
+      return {
+        icon: 'cube-outline' as const,
+        bg: '#FFEDD5',
+        color: '#C2410C',
+        label: 'Potatoes',
+      };
+    }
     if (lower.includes('rice') || lower.includes('umuceri')) {
       return {
         icon: 'leaf-outline' as const,
         bg: '#DCFCE7',
         color: '#15803D',
         label: 'Rice',
+      };
+    }
+    if (lower.includes('avocado') || lower.includes('avoka')) {
+      return {
+        icon: 'leaf' as const,
+        bg: '#ECFCCB',
+        color: '#3F6212',
+        label: 'Avocados',
+      };
+    }
+    if (lower.includes('banana') || lower.includes('igitoki') || lower.includes('ibitoki')) {
+      return {
+        icon: 'nutrition-outline' as const,
+        bg: '#FEF9C3',
+        color: '#A16207',
+        label: 'Bananas',
+      };
+    }
+    if (lower.includes('onion') || lower.includes('ibitunguru')) {
+      return {
+        icon: 'flower-outline' as const,
+        bg: '#F3E8FF',
+        color: '#7E22CE',
+        label: 'Onions',
       };
     }
     if (lower.includes('soy') || lower.includes('soya')) {
@@ -48,12 +88,12 @@ export const CropBadge: React.FC<CropBadgeProps> = ({
         label: 'Soybeans',
       };
     }
-    if (lower.includes('potato') || lower.includes('ibirayi')) {
+    if (lower.includes('cassava') || lower.includes('imyumbati')) {
       return {
         icon: 'cube-outline' as const,
-        bg: '#FFEDD5',
-        color: '#C2410C',
-        label: 'Potatoes',
+        bg: '#CCFBF1',
+        color: '#0F766E',
+        label: 'Cassava',
       };
     }
     if (lower.includes('coffee') || lower.includes('ikawa')) {
