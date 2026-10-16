@@ -23,7 +23,8 @@ import { UserRole } from '../../domain/enums';
 interface RegisterScreenProps {
   onRegisterSuccess: (user: User) => void;
   onNavigateToLogin: () => void;
-  initialRole?: UserRole;
+  onBackToRoleSelect?: () => void;
+  selectedRole?: UserRole.SUPPLIER | UserRole.BUYER;
 }
 
 const RWANDA_DISTRICTS = [
@@ -42,12 +43,13 @@ const RWANDA_DISTRICTS = [
 export const RegisterScreen: React.FC<RegisterScreenProps> = ({
   onRegisterSuccess,
   onNavigateToLogin,
-  initialRole = UserRole.SUPPLIER,
+  onBackToRoleSelect,
+  selectedRole = UserRole.SUPPLIER,
 }) => {
   const { t, language, setLanguage } = useTranslation();
 
   // Form State
-  const [role, setRole] = useState<UserRole>(initialRole);
+  const [role, setRole] = useState<UserRole.SUPPLIER | UserRole.BUYER>(selectedRole);
   const [fullName, setFullName] = useState('');
   const [phone, setPhone] = useState('');
   const [email, setEmail] = useState('');
@@ -154,33 +156,6 @@ export const RegisterScreen: React.FC<RegisterScreenProps> = ({
     }
   };
 
-  const roles = [
-    {
-      key: UserRole.SUPPLIER,
-      title: t.auth.roleSupplierTitle,
-      desc: t.auth.roleSupplierDesc,
-      icon: 'leaf' as const,
-      color: colors.primary,
-      bg: '#DCFCE7',
-    },
-    {
-      key: UserRole.BUYER,
-      title: t.auth.roleBuyerTitle,
-      desc: t.auth.roleBuyerDesc,
-      icon: 'business' as const,
-      color: colors.infoDark,
-      bg: '#DBEAFE',
-    },
-    {
-      key: UserRole.FIELD_AGENT,
-      title: t.auth.roleAgentTitle,
-      desc: t.auth.roleAgentDesc,
-      icon: 'clipboard' as const,
-      color: colors.warningDark,
-      bg: '#FEF3C7',
-    },
-  ];
-
   return (
     <SafeAreaView style={styles.safeArea} edges={['top', 'bottom', 'left', 'right']}>
       <KeyboardAvoidingView
@@ -193,17 +168,23 @@ export const RegisterScreen: React.FC<RegisterScreenProps> = ({
           showsVerticalScrollIndicator={false}
         >
           <View style={styles.contentWrapper}>
-            {/* 1. Top Bar with Language Pill and Return to Sign-in */}
+            {/* 1. Top Bar with Back Button and Language Pill */}
             <View style={styles.topBar}>
               <TouchableOpacity
                 style={styles.backToLoginBtn}
-                onPress={onNavigateToLogin}
+                onPress={onBackToRoleSelect || onNavigateToLogin}
                 activeOpacity={0.8}
                 accessibilityRole="button"
-                accessibilityLabel={t.auth.signInLink}
+                accessibilityLabel="Go back"
               >
                 <Ionicons name="arrow-back" size={16} color="#FFFFFF" />
-                <Text style={styles.backToLoginText}>{t.auth.signInLink}</Text>
+                <Text style={styles.backToLoginText}>
+                  {onBackToRoleSelect
+                    ? language === 'rw'
+                      ? 'Guhindura'
+                      : 'Role Selection'
+                    : t.auth.signInLink}
+                </Text>
               </TouchableOpacity>
 
               <TouchableOpacity
@@ -242,57 +223,58 @@ export const RegisterScreen: React.FC<RegisterScreenProps> = ({
                 </View>
               ) : null}
 
-              {/* 4. Role Selection Step */}
+              {/* Selected Role Banner (Pre-selected from role choice journey) */}
+              <View style={styles.selectedRoleBanner}>
+                <View
+                  style={[
+                    styles.selectedRoleIconWrap,
+                    {
+                      backgroundColor:
+                        role === UserRole.SUPPLIER ? '#DCFCE7' : '#DBEAFE',
+                    },
+                  ]}
+                >
+                  <Ionicons
+                    name={role === UserRole.SUPPLIER ? 'leaf' : 'business'}
+                    size={22}
+                    color={role === UserRole.SUPPLIER ? colors.primary : colors.infoDark}
+                  />
+                </View>
+
+                <View style={styles.selectedRoleTextWrap}>
+                  <Text style={styles.selectedRolePreTitle}>
+                    {t.auth.selectedRoleBanner}
+                  </Text>
+                  <Text style={styles.selectedRoleMainTitle}>
+                    {role === UserRole.SUPPLIER
+                      ? t.auth.roleSupplierTitle
+                      : t.auth.roleBuyerTitle}
+                  </Text>
+                  <Text style={styles.selectedRoleSubDesc}>
+                    {role === UserRole.SUPPLIER
+                      ? t.auth.roleSupplierDesc
+                      : t.auth.roleBuyerDesc}
+                  </Text>
+                </View>
+
+                {onBackToRoleSelect && (
+                  <TouchableOpacity
+                    style={styles.changeRoleBtn}
+                    onPress={onBackToRoleSelect}
+                    activeOpacity={0.7}
+                    accessibilityRole="button"
+                    accessibilityLabel={t.auth.changeRole}
+                  >
+                    <Ionicons name="swap-horizontal" size={14} color={colors.primary} />
+                    <Text style={styles.changeRoleText}>{t.auth.changeRole}</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+
+              {/* Personal Information Step */}
               <View style={styles.sectionDividerRow}>
                 <View style={styles.sectionNumberBadge}>
                   <Text style={styles.sectionNumberText}>1</Text>
-                </View>
-                <Text style={styles.sectionTitle}>{t.auth.selectYourRole}</Text>
-              </View>
-
-              <View style={styles.roleSelectionContainer}>
-                {roles.map(r => {
-                  const isSelected = role === r.key;
-                  return (
-                    <TouchableOpacity
-                      key={r.key}
-                      style={[styles.roleCard, isSelected && styles.roleCardActive]}
-                      onPress={() => {
-                        setRole(r.key);
-                        setFieldErrors(prev => ({ ...prev, orgName: '' }));
-                      }}
-                      activeOpacity={0.8}
-                      accessibilityRole="radio"
-                      accessibilityState={{ selected: isSelected }}
-                    >
-                      <View style={[styles.roleIconWrap, { backgroundColor: r.bg }]}>
-                        <Ionicons name={r.icon} size={18} color={r.color} />
-                      </View>
-                      <View style={styles.roleTextWrap}>
-                        <Text style={[styles.roleTitle, isSelected && styles.roleTitleActive]}>
-                          {r.title}
-                        </Text>
-                        <Text style={styles.roleDesc}>{r.desc}</Text>
-                      </View>
-                      <View
-                        style={[
-                          styles.radioIndicator,
-                          isSelected && styles.radioIndicatorActive,
-                        ]}
-                      >
-                        {isSelected && (
-                          <Ionicons name="checkmark" size={13} color="#FFFFFF" />
-                        )}
-                      </View>
-                    </TouchableOpacity>
-                  );
-                })}
-              </View>
-
-              {/* 5. Personal Information Step */}
-              <View style={styles.sectionDividerRow}>
-                <View style={styles.sectionNumberBadge}>
-                  <Text style={styles.sectionNumberText}>2</Text>
                 </View>
                 <Text style={styles.sectionTitle}>
                   {language === 'rw' ? 'Imyirondoro Yawe' : 'Personal Details'}
@@ -335,10 +317,10 @@ export const RegisterScreen: React.FC<RegisterScreenProps> = ({
                 autoCapitalize="none"
               />
 
-              {/* 6. Role-Specific Business Information */}
+              {/* 2. Role-Specific Business Information */}
               <View style={styles.sectionDividerRow}>
                 <View style={styles.sectionNumberBadge}>
-                  <Text style={styles.sectionNumberText}>3</Text>
+                  <Text style={styles.sectionNumberText}>2</Text>
                 </View>
                 <Text style={styles.sectionTitle}>
                   {role === UserRole.SUPPLIER
@@ -411,10 +393,10 @@ export const RegisterScreen: React.FC<RegisterScreenProps> = ({
                 </ScrollView>
               </View>
 
-              {/* 7. Security & Passwords */}
+              {/* 3. Security & Passwords */}
               <View style={styles.sectionDividerRow}>
                 <View style={styles.sectionNumberBadge}>
-                  <Text style={styles.sectionNumberText}>4</Text>
+                  <Text style={styles.sectionNumberText}>3</Text>
                 </View>
                 <Text style={styles.sectionTitle}>
                   {language === 'rw' ? 'Umutekano & Ijambobanga' : 'Security & Password'}
@@ -784,62 +766,64 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
     letterSpacing: 0.5,
   },
-  roleSelectionContainer: {
-    gap: spacing.xs + 2,
-    marginBottom: spacing.sm,
-  },
-  roleCard: {
+  selectedRoleBanner: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: colors.surfaceSubtle,
+    backgroundColor: '#F8FAFC',
     borderRadius: radii.lg,
-    padding: spacing.sm + 2,
+    padding: spacing.md,
     borderWidth: 1.5,
     borderColor: colors.border,
+    marginBottom: spacing.xs,
     gap: spacing.sm,
   },
-  roleCardActive: {
-    backgroundColor: colors.surfaceHighlighted,
-    borderColor: colors.primary,
-  },
-  roleIconWrap: {
-    width: 38,
-    height: 38,
+  selectedRoleIconWrap: {
+    width: 44,
+    height: 44,
     borderRadius: radii.md,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  roleTextWrap: {
+  selectedRoleTextWrap: {
     flex: 1,
   },
-  roleTitle: {
-    ...typography.bodyMedium,
-    fontSize: 13,
+  selectedRolePreTitle: {
+    ...typography.caption,
+    fontSize: 10,
     fontWeight: '700',
+    color: colors.neutralGray,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  selectedRoleMainTitle: {
+    ...typography.bodyMedium,
+    fontSize: 14,
+    fontWeight: '800',
     color: colors.neutralHeadings,
   },
-  roleTitleActive: {
-    color: colors.primaryDark,
-  },
-  roleDesc: {
+  selectedRoleSubDesc: {
     ...typography.caption,
     fontSize: 11,
     color: colors.neutralGray,
     marginTop: 1,
     lineHeight: 14,
   },
-  radioIndicator: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    borderWidth: 1.5,
-    borderColor: colors.neutralLight,
+  changeRoleBtn: {
+    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
+    gap: 4,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: colors.border,
+    paddingVertical: 5,
+    paddingHorizontal: 10,
+    borderRadius: radii.md,
   },
-  radioIndicatorActive: {
-    backgroundColor: colors.primary,
-    borderColor: colors.primary,
+  changeRoleText: {
+    ...typography.caption,
+    fontSize: 11,
+    fontWeight: '700',
+    color: colors.primary,
   },
   districtWrap: {
     marginBottom: spacing.md,

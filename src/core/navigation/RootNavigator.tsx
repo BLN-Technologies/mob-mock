@@ -6,9 +6,16 @@ import { colors, radii, shadows, typography, spacing } from '../../theme/tokens'
 import { useTranslation } from '../../i18n';
 import { SplashScreen } from '../bootstrap/SplashScreen';
 import { TopAppBar } from '../../components/navigation/TopAppBar';
-import { LoginScreen } from '../../features/auth/LoginScreen';
+import { WelcomeScreen } from '../../features/auth/WelcomeScreen';
+import { RoleSelectionScreen } from '../../features/auth/RoleSelectionScreen';
 import { RegisterScreen } from '../../features/auth/RegisterScreen';
+import { AgentInviteScreen } from '../../features/auth/AgentInviteScreen';
+import { LoginScreen } from '../../features/auth/LoginScreen';
+import { SupplierOnboardingScreen } from '../../features/auth/SupplierOnboardingScreen';
+import { BuyerOnboardingScreen } from '../../features/auth/BuyerOnboardingScreen';
+import { AgentOnboardingScreen } from '../../features/auth/AgentOnboardingScreen';
 import { AdminHandoffScreen } from '../../features/admin-handoff/AdminHandoffScreen';
+import { authService } from '../../services/mock/mockServices';
 
 // Supplier Screens
 import { SupplierHomeScreen } from '../../features/supplier/SupplierHomeScreen';
@@ -36,11 +43,25 @@ import { ProfileScreen } from '../../features/profile/ProfileScreen';
 import { UserRole } from '../../domain/enums';
 import { User, Lot, Organization, BuyerLotProjection, Order } from '../../domain/models';
 
+type AuthFlowStep =
+  | 'welcome'
+  | 'role_select'
+  | 'register'
+  | 'agent_invite'
+  | 'login'
+  | 'onboarding_supplier'
+  | 'onboarding_buyer'
+  | 'onboarding_agent';
+
 export const RootNavigator: React.FC = () => {
   const { t } = useTranslation();
   const [bootstrapping, setBootstrapping] = useState(true);
   const [currentUser, setCurrentUser] = useState<User | null>(null);
-  const [authScreen, setAuthScreen] = useState<'login' | 'register'>('login');
+
+  // Unauthenticated Entry Flow State
+  const [authFlowStep, setAuthFlowStep] = useState<AuthFlowStep>('welcome');
+  const [selectedRole, setSelectedRole] = useState<UserRole.SUPPLIER | UserRole.BUYER>(UserRole.SUPPLIER);
+  const [newlyRegisteredUser, setNewlyRegisteredUser] = useState<User | null>(null);
 
   // Active Tab state for each role
   const [activeTab, setActiveTab] = useState<string>('home');
@@ -56,6 +77,12 @@ export const RootNavigator: React.FC = () => {
   const [selectedBuyerLot, setSelectedBuyerLot] = useState<BuyerLotProjection | null>(null);
   const [selectedBuyerOrder, setSelectedBuyerOrder] = useState<Order | null>(null);
 
+  const handleLogout = () => {
+    setCurrentUser(null);
+    setNewlyRegisteredUser(null);
+    setAuthFlowStep('welcome');
+  };
+
   if (bootstrapping) {
     return (
       <SplashScreen
@@ -67,11 +94,104 @@ export const RootNavigator: React.FC = () => {
     );
   }
 
+  // Master Unauthenticated Entry Flow
   if (!currentUser) {
-    if (authScreen === 'register') {
+    if (authFlowStep === 'role_select') {
+      return (
+        <RoleSelectionScreen
+          initialRole={selectedRole}
+          onSelectRole={role => {
+            setSelectedRole(role);
+            setAuthFlowStep('register');
+          }}
+          onNavigateBack={() => setAuthFlowStep('welcome')}
+          onNavigateToLogin={() => setAuthFlowStep('login')}
+          onNavigateToAgentInvite={() => setAuthFlowStep('agent_invite')}
+        />
+      );
+    }
+
+    if (authFlowStep === 'register') {
       return (
         <RegisterScreen
+          selectedRole={selectedRole}
           onRegisterSuccess={user => {
+            setNewlyRegisteredUser(user);
+            if (user.role === UserRole.SUPPLIER) {
+              setAuthFlowStep('onboarding_supplier');
+            } else if (user.role === UserRole.BUYER) {
+              setAuthFlowStep('onboarding_buyer');
+            } else if (user.role === UserRole.FIELD_AGENT) {
+              setAuthFlowStep('onboarding_agent');
+            } else {
+              setCurrentUser(user);
+            }
+          }}
+          onBackToRoleSelect={() => setAuthFlowStep('role_select')}
+          onNavigateToLogin={() => setAuthFlowStep('login')}
+        />
+      );
+    }
+
+    if (authFlowStep === 'agent_invite') {
+      return (
+        <AgentInviteScreen
+          onSuccess={user => {
+            setNewlyRegisteredUser(user);
+            setAuthFlowStep('onboarding_agent');
+          }}
+          onNavigateBack={() => setAuthFlowStep('welcome')}
+          onNavigateToLogin={() => setAuthFlowStep('login')}
+        />
+      );
+    }
+
+    if (authFlowStep === 'onboarding_supplier' && newlyRegisteredUser) {
+      const org = authService.getUserOrganization(newlyRegisteredUser);
+      return (
+        <SupplierOnboardingScreen
+          user={newlyRegisteredUser}
+          organization={org}
+          onComplete={() => {
+            setCurrentUser(newlyRegisteredUser);
+            setActiveTab('home');
+          }}
+        />
+      );
+    }
+
+    if (authFlowStep === 'onboarding_buyer' && newlyRegisteredUser) {
+      const org = authService.getUserOrganization(newlyRegisteredUser);
+      return (
+        <BuyerOnboardingScreen
+          user={newlyRegisteredUser}
+          organization={org}
+          onComplete={() => {
+            setCurrentUser(newlyRegisteredUser);
+            setActiveTab('catalogue');
+          }}
+        />
+      );
+    }
+
+    if (authFlowStep === 'onboarding_agent' && newlyRegisteredUser) {
+      const org = authService.getUserOrganization(newlyRegisteredUser);
+      return (
+        <AgentOnboardingScreen
+          user={newlyRegisteredUser}
+          organization={org}
+          onComplete={() => {
+            setCurrentUser(newlyRegisteredUser);
+            setActiveTab('tasks');
+          }}
+        />
+      );
+    }
+
+    if (authFlowStep === 'login') {
+      return (
+        <LoginScreen
+          onLoginSuccess={user => {
             setCurrentUser(user);
             setActiveTab(
               user.role === UserRole.FIELD_AGENT
@@ -81,24 +201,18 @@ export const RootNavigator: React.FC = () => {
                 : 'home'
             );
           }}
-          onNavigateToLogin={() => setAuthScreen('login')}
+          onNavigateToRegister={() => setAuthFlowStep('role_select')}
+          onNavigateBack={() => setAuthFlowStep('welcome')}
         />
       );
     }
 
+    // Default: 'welcome'
     return (
-      <LoginScreen
-        onLoginSuccess={user => {
-          setCurrentUser(user);
-          setActiveTab(
-            user.role === UserRole.FIELD_AGENT
-              ? 'tasks'
-              : user.role === UserRole.BUYER
-              ? 'catalogue'
-              : 'home'
-          );
-        }}
-        onNavigateToRegister={() => setAuthScreen('register')}
+      <WelcomeScreen
+        onGetStarted={() => setAuthFlowStep('role_select')}
+        onNavigateToLogin={() => setAuthFlowStep('login')}
+        onNavigateToAgentInvite={() => setAuthFlowStep('agent_invite')}
       />
     );
   }
@@ -108,7 +222,7 @@ export const RootNavigator: React.FC = () => {
     return (
       <AdminHandoffScreen
         user={currentUser}
-        onLogout={() => setCurrentUser(null)}
+        onLogout={handleLogout}
       />
     );
   }
@@ -195,7 +309,7 @@ export const RootNavigator: React.FC = () => {
           {activeTab === 'profile' && (
             <ProfileScreen
               user={currentUser}
-              onLogout={() => setCurrentUser(null)}
+              onLogout={handleLogout}
               onResetComplete={() => setActiveTab('home')}
               onUserUpdated={updated => setCurrentUser(updated)}
             />
@@ -352,7 +466,7 @@ export const RootNavigator: React.FC = () => {
           {activeTab === 'profile' && (
             <ProfileScreen
               user={currentUser}
-              onLogout={() => setCurrentUser(null)}
+              onLogout={handleLogout}
               onResetComplete={() => setActiveTab('tasks')}
               onUserUpdated={updated => setCurrentUser(updated)}
             />
@@ -535,7 +649,7 @@ export const RootNavigator: React.FC = () => {
           {activeTab === 'profile' && (
             <ProfileScreen
               user={currentUser}
-              onLogout={() => setCurrentUser(null)}
+              onLogout={handleLogout}
               onResetComplete={() => setActiveTab('catalogue')}
               onUserUpdated={updated => setCurrentUser(updated)}
             />

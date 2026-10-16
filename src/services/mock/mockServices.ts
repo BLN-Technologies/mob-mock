@@ -48,7 +48,53 @@ let ordersState: Order[] = [...SEED_ORDERS];
 let disputesState: Dispute[] = [];
 let notificationsState: AppNotification[] = [...SEED_NOTIFICATIONS];
 let gradingRecordsState: GradingRecord[] = [];
+// Agent Invitation Interface and Initial State
+export interface AgentInvitation {
+  code: string;
+  district: string;
+  sector: string;
+  supervisorName: string;
+  status: 'ACTIVE' | 'EXPIRED' | 'USED';
+  expiresAt: string;
+}
+
+const INITIAL_AGENT_INVITATIONS: AgentInvitation[] = [
+  {
+    code: 'AGENT-2026-RW',
+    district: 'Nyagatare',
+    sector: 'Nyagatare',
+    supervisorName: 'Cargo Agronomy Operations',
+    status: 'ACTIVE',
+    expiresAt: '2026-12-31T23:59:59Z',
+  },
+  {
+    code: 'INV-AG-HUYE',
+    district: 'Huye',
+    sector: 'Ngoma',
+    supervisorName: 'Southern Province Operations',
+    status: 'ACTIVE',
+    expiresAt: '2026-12-31T23:59:59Z',
+  },
+  {
+    code: 'AGENT-EXP-2025',
+    district: 'Musanze',
+    sector: 'Muhoza',
+    supervisorName: 'Northern Operations',
+    status: 'EXPIRED',
+    expiresAt: '2025-12-31T23:59:59Z',
+  },
+  {
+    code: 'AGENT-USED-999',
+    district: 'Bugesera',
+    sector: 'Nyamata',
+    supervisorName: 'Eastern Operations',
+    status: 'USED',
+    expiresAt: '2026-12-31T23:59:59Z',
+  },
+];
+
 let isSimulatedOffline = false;
+let agentInvitationsState: AgentInvitation[] = [...INITIAL_AGENT_INVITATIONS];
 
 export const mockState = {
   isOffline: () => isSimulatedOffline,
@@ -64,6 +110,7 @@ export const mockState = {
     disputesState = [];
     notificationsState = [...SEED_NOTIFICATIONS];
     gradingRecordsState = [];
+    agentInvitationsState = [...INITIAL_AGENT_INVITATIONS];
     await localStorage.clearAllData();
   },
 };
@@ -151,6 +198,69 @@ export const authService = {
       email: cleanEmail || `${input.fullName.trim().toLowerCase().replace(/[^a-z0-9]/g, '.')}@cargo.rw`,
       role: input.role,
       organizationId,
+      preferredLanguage: input.preferredLanguage || 'rw',
+      isActive: true,
+      isLocked: false,
+      failedLoginAttempts: 0,
+      createdAt: new Date().toISOString(),
+    };
+
+    usersState.unshift(newUser);
+    await localStorage.setSessionUser(newUser);
+    return { user: newUser, requiresOtp: true };
+  },
+
+  async validateAgentInvitation(code: string): Promise<AgentInvitation> {
+    if (!code || !code.trim()) {
+      throw new Error('Please enter your invitation code.');
+    }
+    const cleanCode = code.trim().toUpperCase();
+    const invitation = agentInvitationsState.find(inv => inv.code === cleanCode);
+    if (!invitation) {
+      throw new Error('Invalid invitation code. Please check with Cargo Operations.');
+    }
+    if (invitation.status === 'EXPIRED') {
+      throw new Error('This invitation code has expired. Please request a new invitation from administrator.');
+    }
+    if (invitation.status === 'USED') {
+      throw new Error('This invitation code has already been redeemed.');
+    }
+    return invitation;
+  },
+
+  async registerFieldAgentWithInvite(input: {
+    code: string;
+    fullName: string;
+    phone: string;
+    nationalId: string;
+    password?: string;
+    preferredLanguage?: 'en' | 'rw';
+  }): Promise<{ user: User; requiresOtp: boolean }> {
+    const invitation = await this.validateAgentInvitation(input.code);
+
+    const rawPhone = input.phone.trim();
+    let cleanPhone = rawPhone.replace(/\s+/g, '');
+    if (cleanPhone.startsWith('07')) {
+      cleanPhone = `+250${cleanPhone.substring(1)}`;
+    } else if (cleanPhone.startsWith('7') && cleanPhone.length === 9) {
+      cleanPhone = `+250${cleanPhone}`;
+    }
+
+    const existing = usersState.find(u => u.phone === cleanPhone);
+    if (existing) {
+      throw new Error('An account with this phone number already exists.');
+    }
+
+    // Mark invitation as redeemed
+    invitation.status = 'USED';
+
+    const newUser: User = {
+      id: `usr-agent-${Date.now()}`,
+      fullName: input.fullName.trim(),
+      phone: cleanPhone,
+      email: `${input.fullName.trim().toLowerCase().replace(/[^a-z0-9]/g, '.')}@cargo.rw`,
+      role: UserRole.FIELD_AGENT,
+      organizationId: 'org-cargo-operations',
       preferredLanguage: input.preferredLanguage || 'rw',
       isActive: true,
       isLocked: false,

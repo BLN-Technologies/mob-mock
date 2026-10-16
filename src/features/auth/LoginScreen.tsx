@@ -22,11 +22,13 @@ import { User } from '../../domain/models';
 interface LoginScreenProps {
   onLoginSuccess: (user: User) => void;
   onNavigateToRegister?: () => void;
+  onNavigateBack?: () => void;
 }
 
 export const LoginScreen: React.FC<LoginScreenProps> = ({
   onLoginSuccess,
   onNavigateToRegister,
+  onNavigateBack,
 }) => {
   const { t, language, setLanguage } = useTranslation();
   const [identifier, setIdentifier] = useState('+250788111222');
@@ -90,30 +92,49 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
           showsVerticalScrollIndicator={false}
         >
           <View style={styles.contentWrapper}>
-            {/* Top Bar with Language Pill and Settings Button */}
+            {/* Top Bar with Back Button, Language Pill, and Settings Button */}
             <View style={styles.topBar}>
-              <TouchableOpacity
-                style={styles.langPill}
-                onPress={toggleLanguage}
-                activeOpacity={0.8}
-                accessibilityRole="button"
-                accessibilityLabel="Toggle Language"
-              >
-                <Ionicons name="globe-outline" size={15} color="#FFFFFF" />
-                <Text style={styles.langPillText}>
-                  {language === 'rw' ? 'English' : 'Ikinyarwanda'}
-                </Text>
-              </TouchableOpacity>
+              {onNavigateBack ? (
+                <TouchableOpacity
+                  style={styles.backBtn}
+                  onPress={onNavigateBack}
+                  activeOpacity={0.8}
+                  accessibilityRole="button"
+                  accessibilityLabel="Back to Welcome"
+                >
+                  <Ionicons name="arrow-back" size={16} color="#FFFFFF" />
+                  <Text style={styles.backBtnText}>
+                    {language === 'rw' ? 'Ahabanza' : 'Welcome'}
+                  </Text>
+                </TouchableOpacity>
+              ) : (
+                <View />
+              )}
 
-              <TouchableOpacity
-                style={styles.settingsIconBtn}
-                onPress={() => setShowSettingsModal(true)}
-                activeOpacity={0.8}
-                accessibilityRole="button"
-                accessibilityLabel="App Settings and Information"
-              >
-                <Ionicons name="settings-outline" size={18} color="#FFFFFF" />
-              </TouchableOpacity>
+              <View style={styles.topBarRight}>
+                <TouchableOpacity
+                  style={styles.langPill}
+                  onPress={toggleLanguage}
+                  activeOpacity={0.8}
+                  accessibilityRole="button"
+                  accessibilityLabel="Toggle Language"
+                >
+                  <Ionicons name="globe-outline" size={15} color="#FFFFFF" />
+                  <Text style={styles.langPillText}>
+                    {language === 'rw' ? 'English' : 'Ikinyarwanda'}
+                  </Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={styles.settingsIconBtn}
+                  onPress={() => setShowSettingsModal(true)}
+                  activeOpacity={0.8}
+                  accessibilityRole="button"
+                  accessibilityLabel="App Settings and Information"
+                >
+                  <Ionicons name="settings-outline" size={18} color="#FFFFFF" />
+                </TouchableOpacity>
+              </View>
             </View>
 
             {/* Brand Header */}
@@ -348,6 +369,26 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: spacing.sm,
     paddingHorizontal: spacing.xs,
+  },
+  backBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: 'rgba(255, 255, 255, 0.15)',
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: radii.full,
+  },
+  backBtnText: {
+    ...typography.caption,
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#FFFFFF',
+  },
+  topBarRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
   },
   langPill: {
     flexDirection: 'row',
