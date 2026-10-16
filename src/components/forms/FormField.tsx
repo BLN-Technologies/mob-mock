@@ -39,9 +39,13 @@ export const FormField: React.FC<FormFieldProps> = ({
   style,
   secureTextEntry,
   multiline,
+  onFocus,
+  onBlur,
+  editable,
   ...props
 }) => {
   const [passwordHidden, setPasswordHidden] = useState<boolean>(Boolean(secureTextEntry));
+  const [isFocused, setIsFocused] = useState<boolean>(false);
 
   const isPassword = Boolean(secureTextEntry);
   const actualSecureTextEntry = isPassword ? passwordHidden : false;
@@ -54,7 +58,9 @@ export const FormField: React.FC<FormFieldProps> = ({
         style={[
           styles.inputWrapper,
           multiline && styles.inputWrapperMultiline,
+          isFocused && !error ? styles.inputWrapperFocused : undefined,
           error ? styles.inputWrapperError : undefined,
+          editable === false ? styles.inputWrapperDisabled : undefined,
         ]}
       >
         {icon ? (
@@ -65,11 +71,19 @@ export const FormField: React.FC<FormFieldProps> = ({
               hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
               accessibilityRole="button"
             >
-              <Ionicons name={icon} size={18} color="#64748B" />
+              <Ionicons
+                name={icon}
+                size={18}
+                color={error ? colors.danger : isFocused ? colors.primary : '#64748B'}
+              />
             </TouchableOpacity>
           ) : (
             <View style={styles.iconAdornment}>
-              <Ionicons name={icon} size={18} color="#64748B" />
+              <Ionicons
+                name={icon}
+                size={18}
+                color={error ? colors.danger : isFocused ? colors.primary : '#64748B'}
+              />
             </View>
           )
         ) : prefix ? (
@@ -82,11 +96,21 @@ export const FormField: React.FC<FormFieldProps> = ({
           style={[
             styles.input,
             multiline && styles.inputMultiline,
+            editable === false && styles.inputDisabled,
             style,
           ]}
           placeholderTextColor="#94A3B8"
           secureTextEntry={actualSecureTextEntry}
           multiline={multiline}
+          editable={editable}
+          onFocus={e => {
+            setIsFocused(true);
+            onFocus?.(e);
+          }}
+          onBlur={e => {
+            setIsFocused(false);
+            onBlur?.(e);
+          }}
           {...props}
         />
 
@@ -171,6 +195,18 @@ const styles = StyleSheet.create({
   inputWrapperError: {
     borderColor: colors.danger,
     backgroundColor: '#FEF2F2',
+  },
+  inputWrapperFocused: {
+    borderColor: colors.primary,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 2,
+  },
+  inputWrapperDisabled: {
+    backgroundColor: '#F1F5F9',
+    borderColor: '#E2E8F0',
+  },
+  inputDisabled: {
+    color: '#94A3B8',
   },
   input: {
     flex: 1,

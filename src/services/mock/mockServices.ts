@@ -20,6 +20,8 @@ import {
 } from '../../domain/models';
 import {
   UserRole,
+  OrganizationType,
+  VerificationStatus,
   LotStatus,
   OrderStatus,
   QualityGrade,
@@ -89,6 +91,76 @@ export const authService = {
     // In demo mode, require simulated OTP for all first device logins
     await localStorage.setSessionUser(user);
     return { user, requiresOtp: true };
+  },
+
+  async register(input: {
+    fullName: string;
+    phone: string;
+    email?: string;
+    password?: string;
+    role: UserRole;
+    organizationName?: string;
+    district?: string;
+    sector?: string;
+    preferredLanguage?: 'en' | 'rw';
+  }): Promise<{ user: User; requiresOtp: boolean }> {
+    const rawPhone = input.phone.trim();
+    // Normalize phone number (handle Rwanda +250 or 07...)
+    let cleanPhone = rawPhone.replace(/\s+/g, '');
+    if (cleanPhone.startsWith('07')) {
+      cleanPhone = `+250${cleanPhone.substring(1)}`;
+    } else if (cleanPhone.startsWith('7') && cleanPhone.length === 9) {
+      cleanPhone = `+250${cleanPhone}`;
+    }
+
+    const cleanEmail = input.email ? input.email.trim().toLowerCase() : undefined;
+
+    // Check for existing account with same phone or email
+    const existing = usersState.find(
+      u => u.phone === cleanPhone || (cleanEmail && u.email.toLowerCase() === cleanEmail)
+    );
+    if (existing) {
+      throw new Error('An account with this phone number or email already exists.');
+    }
+
+    let organizationId = 'org-cargo-operations';
+    if (input.role === UserRole.SUPPLIER || input.role === UserRole.BUYER) {
+      organizationId = `org-${input.role.toLowerCase()}-${Date.now()}`;
+      const newOrg: Organization = {
+        id: organizationId,
+        name:
+          input.organizationName?.trim() ||
+          `${input.fullName.trim()}'s ${input.role === UserRole.SUPPLIER ? 'Cooperative' : 'Enterprise'}`,
+        type: input.role === UserRole.SUPPLIER ? OrganizationType.SUPPLIER : OrganizationType.BUYER,
+        registrationNumber: `RCA/2026/${Math.floor(1000 + Math.random() * 9000)}`,
+        district: input.district || 'Kigali',
+        sector: input.sector || 'Nyarugenge',
+        contactPerson: input.fullName.trim(),
+        phone: cleanPhone,
+        cropsGrown: input.role === UserRole.SUPPLIER ? ['Maize', 'Dry Beans'] : undefined,
+        verificationStatus: VerificationStatus.PENDING,
+        createdAt: new Date().toISOString(),
+      };
+      organizationsState.unshift(newOrg);
+    }
+
+    const newUser: User = {
+      id: `usr-${input.role.toLowerCase()}-${Date.now()}`,
+      fullName: input.fullName.trim(),
+      phone: cleanPhone,
+      email: cleanEmail || `${input.fullName.trim().toLowerCase().replace(/[^a-z0-9]/g, '.')}@cargo.rw`,
+      role: input.role,
+      organizationId,
+      preferredLanguage: input.preferredLanguage || 'rw',
+      isActive: true,
+      isLocked: false,
+      failedLoginAttempts: 0,
+      createdAt: new Date().toISOString(),
+    };
+
+    usersState.unshift(newUser);
+    await localStorage.setSessionUser(newUser);
+    return { user: newUser, requiresOtp: true };
   },
 
   async verifyOtp(code: string): Promise<boolean> {

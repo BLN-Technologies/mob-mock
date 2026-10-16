@@ -21,9 +21,13 @@ import { User } from '../../domain/models';
 
 interface LoginScreenProps {
   onLoginSuccess: (user: User) => void;
+  onNavigateToRegister?: () => void;
 }
 
-export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
+export const LoginScreen: React.FC<LoginScreenProps> = ({
+  onLoginSuccess,
+  onNavigateToRegister,
+}) => {
   const { t, language, setLanguage } = useTranslation();
   const [identifier, setIdentifier] = useState('+250788111222');
   const [password, setPassword] = useState('password123');
@@ -159,6 +163,19 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
                 style={styles.submitBtn}
                 fullWidth
               />
+
+              {onNavigateToRegister && (
+                <View style={styles.registerLinkRow}>
+                  <Text style={styles.registerLinkText}>{t.auth.noAccountPrompt} </Text>
+                  <TouchableOpacity
+                    onPress={onNavigateToRegister}
+                    activeOpacity={0.7}
+                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  >
+                    <Text style={styles.registerHighlightText}>{t.auth.createAccount}</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
 
               {/* Quick Demo Fill Buttons */}
               <View style={styles.demoSection}>
@@ -416,6 +433,24 @@ const styles = StyleSheet.create({
   },
   submitBtn: {
     marginTop: spacing.xs,
+  },
+  registerLinkRow: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginTop: spacing.md,
+    marginBottom: spacing.xs,
+  },
+  registerLinkText: {
+    ...typography.caption,
+    fontSize: 13,
+    color: colors.neutralGray,
+  },
+  registerHighlightText: {
+    ...typography.caption,
+    fontSize: 13,
+    fontWeight: '800',
+    color: colors.primary,
   },
   demoSection: {
     marginTop: spacing.lg,

@@ -7,6 +7,7 @@ import { useTranslation } from '../../i18n';
 import { SplashScreen } from '../bootstrap/SplashScreen';
 import { TopAppBar } from '../../components/navigation/TopAppBar';
 import { LoginScreen } from '../../features/auth/LoginScreen';
+import { RegisterScreen } from '../../features/auth/RegisterScreen';
 import { AdminHandoffScreen } from '../../features/admin-handoff/AdminHandoffScreen';
 
 // Supplier Screens
@@ -39,6 +40,7 @@ export const RootNavigator: React.FC = () => {
   const { t } = useTranslation();
   const [bootstrapping, setBootstrapping] = useState(true);
   const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [authScreen, setAuthScreen] = useState<'login' | 'register'>('login');
 
   // Active Tab state for each role
   const [activeTab, setActiveTab] = useState<string>('home');
@@ -66,6 +68,24 @@ export const RootNavigator: React.FC = () => {
   }
 
   if (!currentUser) {
+    if (authScreen === 'register') {
+      return (
+        <RegisterScreen
+          onRegisterSuccess={user => {
+            setCurrentUser(user);
+            setActiveTab(
+              user.role === UserRole.FIELD_AGENT
+                ? 'tasks'
+                : user.role === UserRole.BUYER
+                ? 'catalogue'
+                : 'home'
+            );
+          }}
+          onNavigateToLogin={() => setAuthScreen('login')}
+        />
+      );
+    }
+
     return (
       <LoginScreen
         onLoginSuccess={user => {
@@ -78,6 +98,7 @@ export const RootNavigator: React.FC = () => {
               : 'home'
           );
         }}
+        onNavigateToRegister={() => setAuthScreen('register')}
       />
     );
   }
