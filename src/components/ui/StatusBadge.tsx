@@ -21,6 +21,7 @@ export const StatusBadge: React.FC<StatusBadgeProps> = ({ status, size = 'medium
       case 'ACCEPTED':
       case 'SETTLED':
       case 'GRADE_A':
+      case 'SYNCED':
         return {
           bg: colors.successLight,
           textColor: colors.successDark,
@@ -36,11 +37,21 @@ export const StatusBadge: React.FC<StatusBadgeProps> = ({ status, size = 'medium
       case 'DELIVERED':
       case 'PROPOSED':
       case 'GRADE_B':
+      case 'QUEUED':
         return {
           bg: colors.warningLight,
           textColor: colors.warningDark,
           borderColor: colors.warningBorder,
-          icon: 'time' as const,
+          icon: status === 'QUEUED' ? ('cloud-upload-outline' as const) : ('time' as const),
+          label: (t.statuses as any)[status] || status,
+        };
+
+      case 'RETRY_SCHEDULED':
+        return {
+          bg: '#FEF3C7',
+          textColor: '#D97706',
+          borderColor: '#FDE68A',
+          icon: 'refresh' as const,
           label: (t.statuses as any)[status] || status,
         };
 
@@ -50,22 +61,34 @@ export const StatusBadge: React.FC<StatusBadgeProps> = ({ status, size = 'medium
       case 'CANCELLED':
       case 'DISPUTED':
       case 'REJECT':
+      case 'FAILED':
+      case 'FAILED_PERMANENT':
         return {
           bg: colors.dangerLight,
           textColor: colors.dangerDark,
           borderColor: colors.dangerBorder,
-          icon: 'alert-circle' as const,
+          icon: status === 'FAILED_PERMANENT' ? ('close-circle' as const) : ('alert-circle' as const),
           label: (t.statuses as any)[status] || status,
         };
 
-      // Reserved / Info
+      case 'CONFLICT':
+        return {
+          bg: '#FEE2E2',
+          textColor: '#B91C1C',
+          borderColor: '#FCA5A5',
+          icon: 'git-compare-outline' as const,
+          label: (t.statuses as any)[status] || status,
+        };
+
+      // Syncing / Reserved / Info
+      case 'SYNCING':
       case 'RESERVED':
       case 'SOLD':
         return {
           bg: colors.infoLight,
           textColor: colors.infoDark,
           borderColor: colors.infoBorder,
-          icon: 'lock-closed' as const,
+          icon: status === 'SYNCING' ? ('sync' as const) : ('lock-closed' as const),
           label: (t.statuses as any)[status] || status,
         };
 

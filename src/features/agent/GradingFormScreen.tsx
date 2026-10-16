@@ -1,10 +1,11 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   ScrollView,
   Alert,
+  TouchableOpacity,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, radii, typography, spacing } from '../../theme/tokens';
@@ -14,6 +15,7 @@ import { FormField } from '../../components/forms/FormField';
 import { StatusBadge } from '../../components/ui/StatusBadge';
 import { CropBadge } from '../../components/ui/CropBadge';
 import { gradingService, mockState } from '../../services/mock/mockServices';
+import { inspectionRepository } from '../../data/local/inspectionRepository';
 import { Lot, User, Organization } from '../../domain/models';
 import { QualityGrade } from '../../domain/enums';
 import { formatQuantity } from '../../domain/calculations/lotCalculations';
@@ -43,6 +45,30 @@ export const GradingFormScreen: React.FC<GradingFormScreenProps> = ({
     lng: 30.4082,
   });
   const [loading, setLoading] = useState(false);
+  const [savingDraft, setSavingDraft] = useState(false);
+  const [hasSavedDraft, setHasSavedDraft] = useState(false);
+  const [draftRestored, setDraftRestored] = useState(false);
+
+  // Restore saved draft on mount if available
+  useEffect(() => {
+    let isMounted = true;
+    inspectionRepository.getDraft(lot.id).then(draft => {
+      if (isMounted && draft) {
+        setMoisture(draft.moisture || '13.2');
+        setForeignMatter(draft.foreignMatter || '0.8');
+        setDefects(draft.defects || '1.5');
+        if (draft.notes) setNotes(draft.notes);
+        setHasSavedDraft(true);
+        setDraftRestored(true);
+      }
+    }).catch(() => {
+      // Ignore read errors
+    });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [lot.id]);
 
   // Live proposed grade calculation
   const mVal = parseFloat(moisture) || 0;
@@ -56,7 +82,71 @@ export const GradingFormScreen: React.FC<GradingFormScreenProps> = ({
     calculatedGrade = QualityGrade.GRADE_B;
   }
 
+  const handleSaveDraft = async (silent = false) => {
+    setSavingDraft(true);
+    try {
+      await inspectionRepository.saveDraft({
+        id: `draft-${lot.id}`,
+        lotId: lot.id,
+        agentId: agent.id,
+        moisture,
+        foreignMatter,
+        defects,
+        notes,
+        photos: lot.photos || [],
+        gps,
+        updatedAt: new Date().toISOString(),
+      });
+      setHasSavedDraft(true);
+      if (!silent) {
+        Alert.alert(t.agent.saveDraft, t.agent.draftSaved);
+      }
+    } catch (err: any) {
+      if (!silent) {
+        Alert.alert(t.agent.storageFailure, err.message || 'Failed to save local draft');
+      }
+    } finally {
+      setSavingDraft(false);
+    }
+  };
+
+  const handleCancel = () => {
+    Alert.alert(
+      t.agent.unsavedChanges,
+      t.agent.unsavedChangesMsg,
+      [
+        { text: t.common.cancel, style: 'cancel' },
+        {
+          text: t.agent.saveDraft,
+          onPress: async () => {
+            await handleSaveDraft(true);
+            onCancel();
+          },
+        },
+        {
+          text: 'Exit Without Saving',
+          style: 'destructive',
+          onPress: onCancel,
+        },
+      ]
+    );
+  };
+
   const handleSubmit = async () => {
+    // Physical validation bounds
+    if (mVal < 0 || mVal > 50) {
+      Alert.alert('Invalid Moisture', 'Moisture percentage must be between 0% and 50%.');
+      return;
+    }
+    if (fmVal < 0 || fmVal > 20) {
+      Alert.alert('Invalid Foreign Matter', 'Foreign matter must be between 0% and 20%.');
+      return;
+    }
+    if (defVal < 0 || defVal > 25) {
+      Alert.alert('Invalid Defect Rate', 'Defective grain share must be between 0% and 25%.');
+      return;
+    }
+
     setLoading(true);
     try {
       await gradingService.submitGrading(
@@ -74,10 +164,10 @@ export const GradingFormScreen: React.FC<GradingFormScreenProps> = ({
 
       const isOffline = mockState.isOffline();
       Alert.alert(
-        isOffline ? 'Saved to Offline Queue' : 'Grading Submitted',
+        isOffline ? t.agent.savedLocally : 'Grading Submitted',
         isOffline
-          ? 'You are currently offline. Your grading record was safely saved to the local offline queue and will sync automatically when connectivity returns (FR-QA-03).'
-          : `Grading recorded successfully as ${calculatedGrade}. The lot is now verified and visible on the Cargo marketplace.`,
+          ? `You are currently offline. Inspection for lot ${lot.lotCode} was securely saved to durable local storage and enqueued for automatic synchronization when connectivity returns (BR-01, FR-QA-03).`
+          : `Grading recorded successfully as ${calculatedGrade}. In accordance with BR-02, this lot is awaiting Cargo Operations administrative review before buyer marketplace listing.`,
         [{ text: t.common.done, onPress: onSuccess }]
       );
     } catch (err: any) {
@@ -89,6 +179,19 @@ export const GradingFormScreen: React.FC<GradingFormScreenProps> = ({
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.scrollContent}>
+      {/* Draft Restored Banner */}
+      {draftRestored && (
+        <View style={styles.draftRestoredBox}>
+          <Ionicons name="document-text" size={16} color={colors.primary} />
+          <Text style={styles.draftRestoredText}>
+            Restored saved inspection draft from local device storage.
+          </Text>
+          <TouchableOpacity onPress={() => setDraftRestored(false)}>
+            <Ionicons name="close-circle" size={16} color={colors.neutralGray} />
+          </TouchableOpacity>
+        </View>
+      )}
+
       {/* Header Info */}
       <View style={styles.lotSummaryBox}>
         <View style={styles.summaryTopRow}>
@@ -167,14 +270,26 @@ export const GradingFormScreen: React.FC<GradingFormScreenProps> = ({
       <View style={styles.immutableNotice}>
         <Ionicons name="information-circle" size={18} color="#0369A1" />
         <Text style={styles.immutableNoticeText}>
-          Submitted grading records are immutable (FR-QA-05). Any future corrections will be appended as a new dated inspection record.
+          Submitted grading records are immutable (FR-QA-05). Quality inspections do not fabricate administrative approval (BR-02).
         </Text>
+      </View>
+
+      {/* Action Buttons */}
+      <View style={styles.saveDraftRow}>
+        <Button
+          title={hasSavedDraft ? 'Update Draft' : t.agent.saveDraft}
+          onPress={() => handleSaveDraft(false)}
+          variant="secondary"
+          loading={savingDraft}
+          icon={<Ionicons name="save-outline" size={16} color={colors.primary} />}
+          style={styles.btnFull}
+        />
       </View>
 
       <View style={styles.buttonRow}>
         <Button
           title={t.common.cancel}
-          onPress={onCancel}
+          onPress={handleCancel}
           variant="secondary"
           style={styles.btnHalf}
         />
@@ -197,6 +312,23 @@ const styles = StyleSheet.create({
   scrollContent: {
     padding: spacing.md,
     paddingBottom: spacing.xxxl + 20,
+  },
+  draftRestoredBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.surfaceHighlighted,
+    borderWidth: 1,
+    borderColor: colors.successBorder,
+    padding: spacing.sm,
+    borderRadius: radii.md,
+    marginBottom: spacing.md,
+    gap: spacing.xs,
+  },
+  draftRestoredText: {
+    ...typography.caption,
+    fontSize: 12,
+    color: colors.successDark,
+    flex: 1,
   },
   lotSummaryBox: {
     backgroundColor: '#FFFFFF',
@@ -296,10 +428,16 @@ const styles = StyleSheet.create({
     flex: 1,
     lineHeight: 16,
   },
+  saveDraftRow: {
+    marginBottom: spacing.sm,
+  },
   buttonRow: {
     flexDirection: 'row',
     gap: spacing.sm,
     marginTop: spacing.xs,
+  },
+  btnFull: {
+    width: '100%',
   },
   btnHalf: {
     flex: 1,

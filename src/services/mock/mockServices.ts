@@ -49,6 +49,8 @@ import {
 import { calculateBuyerFee, calculateSupplierPayout } from '../../domain/calculations/feeCalculator';
 import { projectLotForBuyer } from '../../domain/projections/buyerProjections';
 import { localStorage } from '../../data/local/storage';
+import { syncCoordinator } from '../sync/syncCoordinator';
+import { mockSyncAdapter } from '../sync/syncAdapter';
 import {
   IAuthService,
   SupplierRegistrationInput,
@@ -135,6 +137,7 @@ export const mockState = {
     notificationsState = [...SEED_NOTIFICATIONS];
     gradingRecordsState = [];
     agentInvitationsState = [...INITIAL_AGENT_INVITATIONS];
+    mockSyncAdapter.resetIdempotencyRegistry?.();
     await localStorage.clearAllData();
   },
 };
@@ -719,15 +722,8 @@ export const gradingService = {
     gradingRecordsState.push(gradingRecord);
 
     if (isSimulatedOffline) {
-      // Enqueue to persistent offline queue
-      await localStorage.enqueueOfflineItem({
-        id: `op-${Date.now()}`,
-        type: 'SUBMIT_GRADING',
-        payload: { lotId, gradingRecord },
-        status: SyncStatus.QUEUED,
-        retryCount: 0,
-        createdAt: new Date().toISOString(),
-      });
+      // Enqueue to persistent offline queue with client idempotency key & local inspection persistence
+      await syncCoordinator.enqueueInspection(lotId, gradingRecord, agent);
       return gradingRecord;
     }
 
@@ -1440,45 +1436,17 @@ export const settlementService = {
 // 7. Offline Queue Synchronization Service
 export const offlineQueueService = {
   async syncPendingQueue(): Promise<{ syncedCount: number; errors: string[] }> {
-    const queue = await localStorage.getOfflineQueue();
-    const pending = queue.filter(q => q.status === SyncStatus.QUEUED || q.status === SyncStatus.FAILED);
-    const errors: string[] = [];
-    let syncedCount = 0;
-
-    for (const item of pending) {
-      try {
-        if (item.type === 'SUBMIT_GRADING') {
-          const { lotId, gradingRecord } = item.payload;
-          const lot = lotsState.find(l => l.id === lotId);
-          if (lot) {
-            lot.grade = gradingRecord.finalGrade;
-            lot.gradedAt = gradingRecord.createdAt;
-            lot.inspectedByAgentId = gradingRecord.fieldAgentId;
-            lot.updatedAt = new Date().toISOString();
-            // Note: Does NOT fabricate admin approval; remains pending admin review (BR-02)
-          }
-          if (
-            gradingRecord &&
-            !gradingRecordsState.some(
-              gr => gr.id === gradingRecord.id || (gr.lotId === lotId && gr.finalGrade === gradingRecord.finalGrade)
-            )
-          ) {
-            gradingRecordsState.push(gradingRecord);
-          }
-        }
-        await localStorage.updateOfflineItem(item.id, { status: SyncStatus.SYNCED });
-        syncedCount++;
-      } catch (err: any) {
-        errors.push(`Failed syncing item ${item.id}: ${err.message}`);
-        await localStorage.updateOfflineItem(item.id, {
-          status: SyncStatus.FAILED,
-          errorMessage: err.message,
-          retryCount: item.retryCount + 1,
-        });
-      }
-    }
-
-    return { syncedCount, errors };
+    const res = await syncCoordinator.processQueue();
+    return { syncedCount: res.syncedCount, errors: res.errors };
+  },
+  async getQueueSummary() {
+    return syncCoordinator.getQueueSummary();
+  },
+  async retryItem(itemId: string) {
+    return syncCoordinator.retryItem(itemId);
+  },
+  async discardItem(itemId: string) {
+    return syncCoordinator.discardItem(itemId);
   },
 };
 

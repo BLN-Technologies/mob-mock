@@ -13,10 +13,15 @@ import { createSettlementsFromOrder, validateSettlementDisbursement } from '../s
 import { calculateBuyerTotal, calculateSupplierPayout } from '../src/domain/calculations/feeCalculator';
 import { formatQuantity, formatRwf, calculateRemainingQuantity } from '../src/domain/calculations/lotCalculations';
 import { projectLotForBuyer, projectAllocationsForBuyer } from '../src/domain/projections/buyerProjections';
-import { LotStatus, OrderStatus, QualityGrade, PaymentStatus, UserRole, VerificationStatus, OfferStatus, DisputeStatus, DisputeOutcome, PaymentMethod } from '../src/domain/enums';
-import { Lot, Order, User, Organization, GradingRecord, Offer, SettlementRecord, Dispute } from '../src/domain/models';
+import { LotStatus, OrderStatus, QualityGrade, PaymentStatus, UserRole, VerificationStatus, OfferStatus, DisputeStatus, DisputeOutcome, PaymentMethod, SyncStatus, SyncErrorCategory } from '../src/domain/enums';
+import { Lot, Order, User, Organization, GradingRecord, Offer, SettlementRecord, Dispute, OfflineQueueItem, InspectionDraft } from '../src/domain/models';
 import { resolveAuthenticatedRoute, canAccessDestination } from '../src/core/navigation/routingPolicy';
-import { authService, normalizeRwandanPhone, isValidEmail, mockState, lotService, gradingService, adminApprovalService, offerService, orderService, disputeService, settlementService } from '../src/services/mock/mockServices';
+import { authService, normalizeRwandanPhone, isValidEmail, mockState, lotService, gradingService, adminApprovalService, offerService, orderService, disputeService, settlementService, offlineQueueService } from '../src/services/mock/mockServices';
+import { SEED_USERS } from '../src/services/mock/seedData';
+import { inspectionRepository } from '../src/data/local/inspectionRepository';
+import { syncCoordinator } from '../src/services/sync/syncCoordinator';
+import { mockSyncAdapter } from '../src/services/sync/syncAdapter';
+import { localStorage } from '../src/data/local/storage';
 
 declare const process: any;
 
@@ -1219,6 +1224,353 @@ async function runAllTests() {
     await settlementService.disburseSettlement(orderStl.id, admin);
     assert(orderStl.status === 'SETTLED', 'Step 12: Settlement payout completed -> Status SETTLED');
     assert(order.status === OrderStatus.SETTLED, 'Step 12: Order lifecycle successfully fulfilled -> Status SETTLED');
+  }
+
+  // 17. Local Inspection Storage & Draft Lifecycle
+  console.log('[Suite 17: Local Inspection Storage & Draft Lifecycle]');
+  {
+    await mockState.resetAll();
+
+    // 1. Save draft
+    const draft: InspectionDraft = {
+      id: 'draft-lot-offline-01',
+      lotId: 'lot-offline-01',
+      agentId: 'usr-agent-01',
+      moisture: '12.8',
+      foreignMatter: '0.6',
+      defects: '1.2',
+      notes: 'Grain stored in dry hermetic bags. Clean aroma.',
+      photos: ['https://example.com/lot-offline.jpg'],
+      gps: { lat: -1.9441, lng: 30.0619 },
+      updatedAt: new Date().toISOString(),
+    };
+    await inspectionRepository.saveDraft(draft);
+
+    // 2. Retrieve draft
+    const retrievedDraft = await inspectionRepository.getDraft('lot-offline-01');
+    assert(retrievedDraft !== null, 'Persists draft in local repository');
+    assert(retrievedDraft?.moisture === '12.8', 'Preserves draft moisture measurement');
+    assert(retrievedDraft?.gps?.lat === -1.9441, 'Preserves draft GPS location');
+
+    // 3. Update draft
+    await inspectionRepository.saveDraft({
+      ...draft,
+      moisture: '13.0',
+      notes: 'Updated field notes with supervisor confirmation',
+    });
+    const updatedDraft = await inspectionRepository.getDraft('lot-offline-01');
+    assert(updatedDraft?.moisture === '13.0', 'Updates existing draft without duplication');
+    assert(updatedDraft?.notes.includes('supervisor confirmation') === true, 'Preserves updated draft notes');
+
+    // 4. Save completed local inspection
+    const gradingRecord: GradingRecord = {
+      id: 'grd-offline-test-01',
+      lotId: 'lot-offline-01',
+      fieldAgentId: 'usr-agent-01',
+      fieldAgentName: 'Claude Nzaramba',
+      measurements: [
+        { metricName: 'moisture', labelEn: 'Moisture', labelRw: 'Ubuhehere', value: 13.0, unit: '%', passedThreshold: true },
+        { metricName: 'foreignMatter', labelEn: 'Foreign Matter', labelRw: 'Ibintu bitarimo', value: 0.6, unit: '%', passedThreshold: true },
+        { metricName: 'defects', labelEn: 'Defective Grain', labelRw: 'Ibyangiritse', value: 1.2, unit: '%', passedThreshold: true },
+      ],
+      moisturePercentage: 13.0,
+      foreignMatterPercentage: 0.6,
+      defectiveRatePercentage: 1.2,
+      calculatedGrade: QualityGrade.GRADE_A,
+      finalGrade: QualityGrade.GRADE_A,
+      photos: ['https://example.com/photo-01.jpg'],
+      notes: 'Final local inspection recorded.',
+      isOfflineSubmission: true,
+      createdAt: new Date().toISOString(),
+    };
+    await inspectionRepository.saveInspection(gradingRecord);
+
+    const savedRecord = await inspectionRepository.getInspectionById('grd-offline-test-01');
+    assert(savedRecord !== null, 'Durable local repository saves completed inspection');
+    assert(savedRecord?.finalGrade === QualityGrade.GRADE_A, 'Persists calculated final grade');
+
+    // 5. Draft cleanup on submission
+    await inspectionRepository.removeDraft('lot-offline-01');
+    const clearedDraft = await inspectionRepository.getDraft('lot-offline-01');
+    assert(clearedDraft === null, 'Clears draft once inspection submitted');
+
+    // 6. Multi-inspection query
+    const allLocal = await inspectionRepository.getInspections();
+    assert(allLocal.some(r => r.id === 'grd-offline-test-01'), 'getInspections returns locally stored record');
+  }
+
+  // 18. Queue Concurrency Lock & Idempotent Retries
+  console.log('[Suite 18: Queue Concurrency Lock & Idempotent Retries]');
+  {
+    await mockState.resetAll();
+    const agent = SEED_USERS.find(u => u.role === UserRole.FIELD_AGENT)!;
+
+    // 1. Enqueue inspection creates stable idempotency key
+    const record: GradingRecord = {
+      id: 'grd-idem-001',
+      lotId: 'lot-001',
+      fieldAgentId: 'usr-agent-01',
+      fieldAgentName: 'Claude Nzaramba',
+      measurements: [],
+      moisturePercentage: 12.5,
+      foreignMatterPercentage: 0.8,
+      defectiveRatePercentage: 1.0,
+      calculatedGrade: QualityGrade.GRADE_A,
+      finalGrade: QualityGrade.GRADE_A,
+      photos: [],
+      notes: 'Idempotency test lot',
+      isOfflineSubmission: true,
+      createdAt: new Date().toISOString(),
+    };
+
+    const queueItem = await syncCoordinator.enqueueInspection('lot-001', record, agent);
+    assert(queueItem.idempotencyKey === 'idem-grd-idem-001', 'Assigns stable deterministic client idempotency key');
+    assert(queueItem.status === SyncStatus.QUEUED, 'Enqueued item starts in QUEUED state');
+
+    // 2. Concurrency Lock: multiple rapid sync calls do not double-process
+    mockState.setOffline(false);
+    const syncPromise1 = syncCoordinator.processQueue();
+    const syncPromise2 = syncCoordinator.processQueue(); // Concurrent trigger
+    const [res1, res2] = await Promise.all([syncPromise1, syncPromise2]);
+
+    assert(res1.syncedCount === 1 || res2.syncedCount === 1, 'One worker processes the queued item');
+    assert(res1.inProgress === true || res2.inProgress === true, 'Second concurrent call blocked by isSyncInProgress lock');
+
+    // 3. Duplicate submission prevention via mockSyncAdapter idempotency token cache
+    const duplicateRes = await mockSyncAdapter.submitGrading({
+      lotId: 'lot-001',
+      gradingRecord: record,
+      idempotencyKey: 'idem-grd-idem-001',
+    });
+    assert(duplicateRes.success === true, 'Duplicate submission returns success');
+    assert(duplicateRes.isDuplicate === true, 'Recognizes existing idempotency key and marks isDuplicate: true');
+
+    // 4. Retry preserves same stable operation ID and idempotency key
+    const retryItem = await syncCoordinator.enqueueInspection('lot-002', {
+      ...record,
+      id: 'grd-idem-002',
+      lotId: 'lot-002',
+    }, agent);
+    assert(retryItem.id === 'op-grd-idem-002', 'Reuses operation ID on retry');
+    assert(retryItem.idempotencyKey === 'idem-grd-idem-002', 'Reuses client idempotency token on retry');
+  }
+
+  // 19. Error Classification, Bounded Backoff & Conflict Handling
+  console.log('[Suite 19: Error Classification, Bounded Backoff & Conflict Handling]');
+  {
+    await mockState.resetAll();
+    const agent = SEED_USERS.find(u => u.role === UserRole.FIELD_AGENT)!;
+
+    // 1. Transient network failure -> RETRY_SCHEDULED with exponential backoff
+    mockState.setOffline(true);
+    const record1: GradingRecord = {
+      id: 'grd-transient-01',
+      lotId: 'lot-001',
+      fieldAgentId: 'usr-agent-01',
+      fieldAgentName: 'Claude Nzaramba',
+      measurements: [],
+      moisturePercentage: 13.0,
+      foreignMatterPercentage: 0.5,
+      defectiveRatePercentage: 1.0,
+      calculatedGrade: QualityGrade.GRADE_A,
+      finalGrade: QualityGrade.GRADE_A,
+      photos: [],
+      notes: 'Transient network failure test',
+      isOfflineSubmission: true,
+      createdAt: new Date().toISOString(),
+    };
+    const queued1 = await syncCoordinator.enqueueInspection('lot-001', record1, agent);
+    const syncRes1 = await syncCoordinator.processQueue();
+    assert(syncRes1.syncedCount === 0, 'No items synced while offline');
+
+    const queueAfter1 = await localStorage.getOfflineQueue();
+    const item1 = queueAfter1.find(q => q.id === queued1.id)!;
+    assert(item1.status === SyncStatus.RETRY_SCHEDULED, 'Transient network failure transitions to RETRY_SCHEDULED');
+    assert(item1.errorCategory === SyncErrorCategory.TRANSIENT, 'Classifies network failure as TRANSIENT');
+    assert(item1.retryCount === 1, 'Increments retry attempt counter to 1');
+    assert(new Date(item1.nextRetryAt!).getTime() > Date.now(), 'Schedules next retry timestamp into the future');
+
+    // 2. Permanent validation error: Measurements out of agricultural bounds
+    mockState.setOffline(false);
+    const recordBad: GradingRecord = {
+      id: 'grd-permanent-bad-01',
+      lotId: 'lot-001',
+      fieldAgentId: 'usr-agent-01',
+      fieldAgentName: 'Claude Nzaramba',
+      measurements: [],
+      moisturePercentage: 95.0, // Impossible physical moisture (> 50%)
+      foreignMatterPercentage: 0.5,
+      defectiveRatePercentage: 1.0,
+      calculatedGrade: QualityGrade.GRADE_C,
+      finalGrade: QualityGrade.GRADE_C,
+      photos: [],
+      notes: 'Bad measurements payload',
+      isOfflineSubmission: true,
+      createdAt: new Date().toISOString(),
+    };
+    const queuedBad = await syncCoordinator.enqueueInspection('lot-001', recordBad, agent);
+    await syncCoordinator.processQueue();
+    const queueAfterBad = await localStorage.getOfflineQueue();
+    const itemBad = queueAfterBad.find(q => q.id === queuedBad.id)!;
+    assert(itemBad.status === SyncStatus.FAILED_PERMANENT, 'Physical validation failure transitions to FAILED_PERMANENT');
+    assert(itemBad.errorCategory === SyncErrorCategory.PERMANENT, 'Classifies invalid measurements as PERMANENT error');
+
+    // 3. Conflict: Referenced lot is rejected or sold while agent was offline
+    const rejectedLot = await lotService.getLotById('lot-003');
+    if (rejectedLot) {
+      rejectedLot.status = LotStatus.REJECTED;
+    }
+    const recordConflict: GradingRecord = {
+      id: 'grd-conflict-01',
+      lotId: 'lot-003',
+      fieldAgentId: 'usr-agent-01',
+      fieldAgentName: 'Claude Nzaramba',
+      measurements: [],
+      moisturePercentage: 13.0,
+      foreignMatterPercentage: 0.5,
+      defectiveRatePercentage: 1.0,
+      calculatedGrade: QualityGrade.GRADE_A,
+      finalGrade: QualityGrade.GRADE_A,
+      photos: [],
+      notes: 'Conflict inspection on rejected lot',
+      isOfflineSubmission: true,
+      createdAt: new Date().toISOString(),
+    };
+    const queuedConflict = await syncCoordinator.enqueueInspection('lot-003', recordConflict, agent);
+    await syncCoordinator.processQueue();
+    const queueAfterConflict = await localStorage.getOfflineQueue();
+    const itemConflict = queueAfterConflict.find(q => q.id === queuedConflict.id)!;
+    assert(itemConflict.status === SyncStatus.CONFLICT, 'Closed/rejected lot detected as CONFLICT');
+    assert(itemConflict.errorCategory === SyncErrorCategory.CONFLICT, 'Classifies closed lot as CONFLICT category');
+    assert(itemConflict.errorMessage?.includes('Synchronization conflict') === true, 'Preserves actionable conflict message');
+
+    // Conflict does NOT delete local inspection record
+    const localConflictRecord = await inspectionRepository.getInspectionById('grd-conflict-01');
+    assert(localConflictRecord !== null, 'Local inspection strictly preserved after conflict for supervisor review');
+  }
+
+  // 20. Startup Recovery & Crash Reconciliation
+  console.log('[Suite 20: Startup Recovery & Crash Reconciliation]');
+  {
+    await mockState.resetAll();
+
+    // 1. Simulate interrupted sync operation left in 'SYNCING' state due to app kill
+    await localStorage.enqueueOfflineItem({
+      id: 'op-crashed-worker-01',
+      type: 'SUBMIT_GRADING',
+      entityId: 'lot-001',
+      payload: { lotId: 'lot-001' },
+      status: SyncStatus.SYNCING,
+      retryCount: 1,
+      createdAt: new Date(Date.now() - 60000).toISOString(),
+    });
+
+    // 2. Run Startup Reconciler
+    const reconcileResult = await inspectionRepository.reconcileStartupState();
+    assert(reconcileResult.recoveredCount === 1, 'Reconciler recovers 1 abandoned SYNCING operation');
+
+    // 3. Verify item recovered to RETRY_SCHEDULED with explanatory message
+    const queue = await localStorage.getOfflineQueue();
+    const recoveredItem = queue.find(q => q.id === 'op-crashed-worker-01')!;
+    assert(recoveredItem.status === SyncStatus.RETRY_SCHEDULED, 'Recovered item safely moved to RETRY_SCHEDULED');
+    assert(recoveredItem.errorMessage?.includes('interrupted by app termination') === true, 'Attaches safe recovery explanation');
+    assert(recoveredItem.retryCount === 2, 'Increments retry attempt counter on recovery');
+  }
+
+  // 21. Full Field Agent Offline-First Multi-Scenario Journey
+  console.log('[Suite 21: Full Field Agent Offline-First Multi-Scenario Journey]');
+  {
+    await mockState.resetAll();
+    const supplier = SEED_USERS.find(u => u.role === UserRole.SUPPLIER)!;
+    const agent = SEED_USERS.find(u => u.role === UserRole.FIELD_AGENT)!;
+    const admin = SEED_USERS.find(u => u.role === UserRole.ADMINISTRATOR)!;
+
+    // Supplier declares new harvest lot
+    const declaredLot = await lotService.createLot({
+      cropName: 'Maize',
+      variety: 'Nyirakaragaza',
+      totalQuantityKg: 8000,
+      pricePerKgRwf: 410,
+      harvestDate: '2026-10-01',
+      availabilityDate: '2026-10-15',
+      pickupDistrict: 'Nyagatare',
+      pickupSector: 'Karangazi',
+      pickupLocationDetails: 'Warehouse Section C',
+      photos: ['https://example.com/maize-fresh.jpg'],
+      harvestConfirmed: true,
+    }, supplier);
+    const testLotId = declaredLot.id;
+
+    // Step 1: Agent goes to remote sector with zero connectivity
+    mockState.setOffline(true);
+    assert(mockState.isOffline() === true, 'Step 1: Agent is offline in remote rural area');
+
+    // Step 2: Agent captures partial draft in the field
+    await inspectionRepository.saveDraft({
+      id: `draft-${testLotId}`,
+      lotId: testLotId,
+      agentId: agent.id,
+      moisture: '13.1',
+      foreignMatter: '0.9',
+      defects: '1.4',
+      notes: `Inspecting ${testLotId} at Nyagatare collection center`,
+      photos: [],
+      updatedAt: new Date().toISOString(),
+    });
+    const draftStep2 = await inspectionRepository.getDraft(testLotId);
+    assert(draftStep2 !== null && draftStep2.moisture === '13.1', 'Step 2: Draft safely persisted locally in field');
+
+    // Step 3: Agent completes inspection and submits while STILL OFFLINE
+    const record = await gradingService.submitGrading(
+      testLotId,
+      agent,
+      { moisture: 13.1, foreignMatter: 0.9, defects: 1.4 },
+      [],
+      'Sample verified dry and clean. Ready for Cargo listing.',
+      { lat: -1.5973, lng: 30.4082 }
+    );
+    assert(record.isOfflineSubmission === true, 'Step 3: Submission recognized as offline submission');
+
+    // Step 4: Verify durable queue state
+    const summaryOffline = await syncCoordinator.getQueueSummary();
+    assert(summaryOffline.pending === 1, 'Step 4: Queue summary shows 1 pending inspection');
+    assert(summaryOffline.synced === 0, 'Step 4: Zero synced inspections while offline');
+
+    // Step 5: Lot remains invisible to buyers (BR-02)
+    const lotPreSync = await lotService.getLotById(testLotId);
+    assert(!isLotBuyerVisible(lotPreSync!), 'Step 5: Lot remains invisible to buyers while pending sync');
+
+    // Step 6: Agent travels back to town and connectivity returns
+    mockState.setOffline(false);
+    assert(mockState.isOffline() === false, 'Step 6: Network connection restored');
+
+    // Step 7: Synchronization coordinator runs
+    const syncResult = await syncCoordinator.processQueue();
+    assert(syncResult.syncedCount === 1, 'Step 7: Synchronized 1 inspection record successfully');
+
+    // Step 8: Verify Queue updated to SYNCED
+    const summaryOnline = await syncCoordinator.getQueueSummary();
+    assert(summaryOnline.pending === 0, 'Step 8: Queue pending count is now 0');
+    assert(summaryOnline.synced === 1, 'Step 8: Queue synced count is now 1');
+    assert(summaryOnline.lastSyncAt !== null, 'Step 8: Last sync timestamp recorded');
+
+    // Step 9: Invariant check (BR-02 decoupling)
+    const lotPostSync = await lotService.getLotById(testLotId);
+    assert(lotPostSync?.grade === QualityGrade.GRADE_A, 'Step 9: Lot reflects QualityGrade.GRADE_A');
+    assert(lotPostSync?.inspectedByAgentId === agent.id, 'Step 9: Lot records field agent accreditation ID');
+    assert(lotPostSync?.adminApprovedAt === undefined, 'Step 9: Sync strictly does NOT fabricate admin approval (BR-02 decoupled)');
+    assert(!isLotBuyerVisible(lotPostSync!), 'Step 9: Lot remains hidden from buyers until administrative operations approval (BR-02)');
+
+    // Step 10: Cargo Administrator reviews inspection and approves lot
+    const approvedLot = await adminApprovalService.approveLot(testLotId, admin);
+    assert(approvedLot.status === LotStatus.VERIFIED, 'Step 10: Admin approves lot -> VERIFIED');
+    assert(isLotBuyerVisible(approvedLot), 'Step 10: Approved lot is now live in Buyer Discover catalogue (BR-02 unlocked)');
+
+    // Step 11: Buyer projection checks (BR-05)
+    const buyerLot = await lotService.getBuyerLotById(testLotId);
+    assert(buyerLot !== undefined, 'Step 11: Buyer can view verified lot');
+    assert((buyerLot as any).supplierId === undefined, 'Step 11: Direct supplier identity protected (BR-05)');
+    assert((buyerLot as any).pickupLocationDetails === undefined, 'Step 11: Private warehouse location protected (BR-05)');
   }
 
   console.log(`\n========================================`);

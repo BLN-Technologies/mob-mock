@@ -11,6 +11,7 @@ import {
   DisputeStatus,
   DisputeOutcome,
   SyncStatus,
+  SyncErrorCategory,
   NotificationType,
 } from '../enums';
 
@@ -128,6 +129,9 @@ export interface GradingRecord {
   notes: string;
   isOfflineSubmission: boolean;
   syncOperationId?: string;
+  syncStatus?: SyncStatus;
+  localSavedAt?: string;
+  updatedAt?: string;
   createdAt: string;
 }
 
@@ -363,12 +367,31 @@ export interface AppNotification {
 }
 
 export interface OfflineQueueItem {
-  id: string; // Client UUID
+  id: string; // Stable client UUID
   type: 'SUBMIT_GRADING' | 'SUPPLIER_VISIT' | 'CREATE_LOT_DRAFT' | 'UPDATE_LOT';
+  entityId?: string; // Associated Lot ID or record ID
   payload: any;
   status: SyncStatus;
   retryCount: number;
+  maxRetries?: number;
+  nextRetryAt?: string;
   lastAttemptAt?: string;
+  errorCategory?: SyncErrorCategory | 'TRANSIENT' | 'PERMANENT' | 'CONFLICT' | 'UNAUTHORIZED';
   errorMessage?: string;
+  idempotencyKey?: string;
   createdAt: string;
+  updatedAt?: string;
+}
+
+export interface InspectionDraft {
+  id: string; // Stable draft ID (e.g. draft-lotId)
+  lotId: string;
+  agentId: string;
+  moisture: string;
+  foreignMatter: string;
+  defects: string;
+  notes: string;
+  photos: string[];
+  gps?: { lat: number; lng: number };
+  updatedAt: string;
 }

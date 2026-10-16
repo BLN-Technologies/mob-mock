@@ -1,10 +1,13 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { User, Lot, OfflineQueueItem } from '../../domain/models';
+import { User, Lot, OfflineQueueItem, InspectionDraft, GradingRecord } from '../../domain/models';
 
 const KEYS = {
   SESSION_USER: '@cargo_session_user',
   LOT_DRAFTS: '@cargo_lot_drafts',
+  INSPECTION_DRAFTS: '@cargo_inspection_drafts',
+  LOCAL_INSPECTIONS: '@cargo_local_inspections',
   OFFLINE_QUEUE: '@cargo_offline_queue',
+  LAST_SYNC_AT: '@cargo_last_sync_at',
   STORED_LOTS: '@cargo_stored_lots',
   STORED_ORDERS: '@cargo_stored_orders',
   STORED_OFFERS: '@cargo_stored_offers',
@@ -165,6 +168,84 @@ export const localStorage = {
     } catch {
       // Ignored
     }
+  },
+
+  // Inspection Drafts
+  async getInspectionDrafts(): Promise<InspectionDraft[]> {
+    try {
+      const raw = await safeGetItem(KEYS.INSPECTION_DRAFTS);
+      return raw ? JSON.parse(raw) : [];
+    } catch {
+      return [];
+    }
+  },
+
+  async getInspectionDraft(lotId: string): Promise<InspectionDraft | null> {
+    try {
+      const drafts = await this.getInspectionDrafts();
+      return drafts.find(d => d.lotId === lotId) || null;
+    } catch {
+      return null;
+    }
+  },
+
+  async saveInspectionDraft(draft: InspectionDraft): Promise<void> {
+    try {
+      const drafts = await this.getInspectionDrafts();
+      const existingIdx = drafts.findIndex(d => d.lotId === draft.lotId);
+      if (existingIdx >= 0) {
+        drafts[existingIdx] = draft;
+      } else {
+        drafts.push(draft);
+      }
+      await safeSetItem(KEYS.INSPECTION_DRAFTS, JSON.stringify(drafts));
+    } catch {
+      // Ignored
+    }
+  },
+
+  async removeInspectionDraft(lotId: string): Promise<void> {
+    try {
+      const drafts = await this.getInspectionDrafts();
+      const filtered = drafts.filter(d => d.lotId !== lotId);
+      await safeSetItem(KEYS.INSPECTION_DRAFTS, JSON.stringify(filtered));
+    } catch {
+      // Ignored
+    }
+  },
+
+  // Locally Saved Completed Inspections
+  async getLocalInspections(): Promise<GradingRecord[]> {
+    try {
+      const raw = await safeGetItem(KEYS.LOCAL_INSPECTIONS);
+      return raw ? JSON.parse(raw) : [];
+    } catch {
+      return [];
+    }
+  },
+
+  async saveLocalInspection(record: GradingRecord): Promise<void> {
+    try {
+      const records = await this.getLocalInspections();
+      const existingIdx = records.findIndex(r => r.id === record.id || (r.lotId === record.lotId && r.createdAt === record.createdAt));
+      if (existingIdx >= 0) {
+        records[existingIdx] = record;
+      } else {
+        records.push(record);
+      }
+      await safeSetItem(KEYS.LOCAL_INSPECTIONS, JSON.stringify(records));
+    } catch {
+      // Ignored
+    }
+  },
+
+  // Last successful synchronization timestamp
+  async getLastSyncAt(): Promise<string | null> {
+    return safeGetItem(KEYS.LAST_SYNC_AT);
+  },
+
+  async setLastSyncAt(isoString: string): Promise<void> {
+    await safeSetItem(KEYS.LAST_SYNC_AT, isoString);
   },
 
   // Reset demo storage
