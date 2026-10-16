@@ -1,4 +1,4 @@
-import { LotStatus } from '../enums';
+import { LotStatus, QualityGrade } from '../enums';
 import { Lot } from '../models';
 
 export function isLotBuyerVisible(lot: Lot): boolean {
@@ -6,7 +6,8 @@ export function isLotBuyerVisible(lot: Lot): boolean {
   if (lot.status !== LotStatus.VERIFIED && lot.status !== LotStatus.RESERVED) {
     return false;
   }
-  if (!lot.grade || !lot.adminApprovedAt) {
+  // Unapproved, ungraded, or rejected lots are never visible in buyer catalogue
+  if (!lot.grade || lot.grade === QualityGrade.REJECT || !lot.adminApprovedAt) {
     return false;
   }
   return lot.remainingQuantityKg > 0;

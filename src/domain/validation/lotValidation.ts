@@ -46,13 +46,13 @@ export function validateLotDeclaration(input: LotValidationInput): ValidationRes
     errors.availabilityDate = 'Availability date cannot be earlier than harvest date';
   }
 
-  if (typeof input.totalQuantityKg !== 'number' || input.totalQuantityKg <= 0) {
+  if (typeof input.totalQuantityKg !== 'number' || isNaN(input.totalQuantityKg) || input.totalQuantityKg <= 0) {
     errors.totalQuantityKg = 'Quantity must be greater than zero';
   } else if (input.totalQuantityKg < 50) {
     errors.totalQuantityKg = 'Minimum commercial lot quantity is 50 kg';
   }
 
-  if (typeof input.pricePerKgRwf !== 'number' || input.pricePerKgRwf <= 0) {
+  if (typeof input.pricePerKgRwf !== 'number' || isNaN(input.pricePerKgRwf) || input.pricePerKgRwf <= 0) {
     errors.pricePerKgRwf = 'Expected price per kg must be greater than 0 RWF';
   } else if (!Number.isInteger(input.pricePerKgRwf)) {
     errors.pricePerKgRwf = 'Price must be a whole number in RWF';
@@ -64,6 +64,11 @@ export function validateLotDeclaration(input: LotValidationInput): ValidationRes
 
   if (!input.pickupSector || input.pickupSector.trim().length === 0) {
     errors.pickupSector = 'Sector is required';
+  }
+
+  // BR-01: Warehouse / aggregation facility readiness
+  if (!input.pickupLocationDetails || input.pickupLocationDetails.trim().length === 0) {
+    errors.pickupLocationDetails = 'Warehouse, collection center, or storage facility details are required (BR-01, FR-LOT-01)';
   }
 
   if (!input.photos || input.photos.length === 0) {

@@ -304,6 +304,14 @@ export const lotService = {
     return lotsState.find(l => l.id === id);
   },
 
+  async getBuyerLotById(id: string): Promise<BuyerLotProjection | undefined> {
+    const lot = lotsState.find(l => l.id === id);
+    if (!lot || !isLotBuyerVisible(lot)) {
+      return undefined;
+    }
+    return projectLotForBuyer(lot);
+  },
+
   async createLot(input: LotValidationInput, user: User): Promise<Lot> {
     const validation = validateLotDeclaration(input);
     if (!validation.isValid) {
@@ -660,16 +668,55 @@ export const orderService = {
       throw new Error(`Cannot pay order in ${order.status} status`);
     }
 
-    // Realistic simulated payment confirmation
+    // Realistic simulated payment confirmation into Cargo Escrow
     order.status = OrderStatus.PAID;
     order.paymentStatus = PaymentStatus.CONFIRMED;
     order.paymentReference = method === PaymentMethod.MOBILE_MONEY ? `MOMO-RW-${Date.now().toString().slice(-6)}` : `BK-RW-${Date.now().toString().slice(-6)}`;
     order.paidAt = new Date().toISOString();
     order.updatedAt = new Date().toISOString();
 
-    // Auto trigger dispatch in demo mode
+    // Notify supplier that payment is confirmed in escrow and dispatch is authorized
+    notificationsState.unshift({
+      id: `ntf-${Date.now()}`,
+      userId: order.allocations[0]?.supplierOrgId || 'usr-supplier-01',
+      type: NotificationType.PAYMENT,
+      titleEn: `Escrow Payment Confirmed: ${order.orderNumber}`,
+      titleRw: `Ubwishyu bwa Escrow Bwemejwe: ${order.orderNumber}`,
+      messageEn: `Buyer payment for order ${order.orderNumber} is confirmed in escrow. You may now dispatch shipment.`,
+      messageRw: `Ubwishyu bw'umuguzi bwemejwe muri escrow ku ibwiriza ${order.orderNumber}. Ushobora kohereza umusaruro.`,
+      isRead: false,
+      createdAt: new Date().toISOString(),
+    });
+
+    return order;
+  },
+
+  async dispatchOrder(orderId: string, supplierUser: User): Promise<Order> {
+    const order = ordersState.find(o => o.id === orderId);
+    if (!order) throw new Error('Order not found');
+
+    // BR-03: Validate that payment is confirmed before dispatch can occur
+    const transitionCheck = validateOrderTransition(order, OrderStatus.DISPATCHED);
+    if (!transitionCheck.success) {
+      throw new Error(transitionCheck.error || 'Cannot dispatch order: Escrow payment is required before dispatch (BR-03)');
+    }
+
     order.status = OrderStatus.DISPATCHED;
     order.dispatchedAt = new Date().toISOString();
+    order.updatedAt = new Date().toISOString();
+
+    // Notify buyer that order has been dispatched
+    notificationsState.unshift({
+      id: `ntf-${Date.now()}`,
+      userId: order.buyerOrgId,
+      type: NotificationType.ORDER,
+      titleEn: `Order Dispatched: ${order.orderNumber}`,
+      titleRw: `Ibikoresho Byatangiye Gutwarwa: ${order.orderNumber}`,
+      messageEn: `Consignment for order ${order.orderNumber} (${order.cropName}) has been dispatched for delivery to ${order.deliveryDistrict}.`,
+      messageRw: `Umusaruro w'ibwiriza ${order.orderNumber} (${order.cropName}) watangiye gutwarwa ujyanywe muri ${order.deliveryDistrict}.`,
+      isRead: false,
+      createdAt: new Date().toISOString(),
+    });
 
     return order;
   },
@@ -793,6 +840,14 @@ export const offlineQueueService = {
             lot.gradedAt = gradingRecord.createdAt;
             lot.status = LotStatus.VERIFIED;
             lot.adminApprovedAt = new Date().toISOString();
+          }
+          if (
+            gradingRecord &&
+            !gradingRecordsState.some(
+              gr => gr.id === gradingRecord.id || (gr.lotId === lotId && gr.finalGrade === gradingRecord.finalGrade)
+            )
+          ) {
+            gradingRecordsState.push(gradingRecord);
           }
         }
         await localStorage.updateOfflineItem(item.id, { status: SyncStatus.SYNCED });

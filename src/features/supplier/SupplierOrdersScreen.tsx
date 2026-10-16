@@ -5,26 +5,30 @@ import {
   StyleSheet,
   ScrollView,
   RefreshControl,
+  Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, radii, typography, spacing } from '../../theme/tokens';
 import { useTranslation } from '../../i18n';
 import { Card } from '../../components/ui/Card';
+import { Button } from '../../components/ui/Button';
 import { StatusBadge } from '../../components/ui/StatusBadge';
 import { CropBadge } from '../../components/ui/CropBadge';
 import { EmptyState } from '../../components/feedback/EmptyState';
 import { orderService } from '../../services/mock/mockServices';
 import { formatRwf, formatQuantity } from '../../domain/calculations/lotCalculations';
 import { Order, User } from '../../domain/models';
+import { OrderStatus } from '../../domain/enums';
 
 interface SupplierOrdersScreenProps {
   user: User;
 }
 
 export const SupplierOrdersScreen: React.FC<SupplierOrdersScreenProps> = ({ user }) => {
-  const { t } = useTranslation();
+  const { t, language } = useTranslation();
   const [orders, setOrders] = useState<Order[]>([]);
   const [refreshing, setRefreshing] = useState(false);
+  const [dispatchingOrderId, setDispatchingOrderId] = useState<string | null>(null);
 
   const loadOrders = async () => {
     const fetched = await orderService.getOrders(user);
@@ -39,6 +43,24 @@ export const SupplierOrdersScreen: React.FC<SupplierOrdersScreenProps> = ({ user
     setRefreshing(true);
     await loadOrders();
     setRefreshing(false);
+  };
+
+  const handleDispatchOrder = async (orderId: string) => {
+    setDispatchingOrderId(orderId);
+    try {
+      await orderService.dispatchOrder(orderId, user);
+      await loadOrders();
+      Alert.alert(
+        language === 'rw' ? 'Byatangiye Gutwarwa' : 'Dispatched',
+        language === 'rw'
+          ? 'Umusaruro wemejwe ko watangiye gutwarwa ujyanywe ku cyicaro cy\'umuguzi.'
+          : 'Consignment marked as dispatched. Buyer and central operations have been notified.'
+      );
+    } catch (err: any) {
+      Alert.alert('Dispatch Error', err.message);
+    } finally {
+      setDispatchingOrderId(null);
+    }
   };
 
   return (
@@ -118,6 +140,39 @@ export const SupplierOrdersScreen: React.FC<SupplierOrdersScreenProps> = ({ user
                     <Text style={styles.paymentRefText}>Ref: {order.paymentReference}</Text>
                   )}
                 </View>
+
+                {/* BR-03: Payment Confirmation & Dispatch Controls */}
+                {order.status === OrderStatus.PAID && (
+                  <View style={styles.dispatchActionBox}>
+                    <View style={styles.escrowNoticeRow}>
+                      <Ionicons name="shield-checkmark" size={15} color={colors.successDark} />
+                      <Text style={styles.escrowNoticeText}>
+                        {language === 'rw'
+                          ? 'Amafaranga yemejwe muri Escrow. Ushobora kohereza ibicuruzwa (BR-03).'
+                          : 'Payment confirmed in Escrow. Shipment authorized for dispatch (BR-03).'}
+                      </Text>
+                    </View>
+                    <Button
+                      title={language === 'rw' ? 'Ohereza Umusaruro' : 'Dispatch Shipment'}
+                      onPress={() => handleDispatchOrder(order.id)}
+                      loading={dispatchingOrderId === order.id}
+                      size="small"
+                      variant="primary"
+                      fullWidth
+                    />
+                  </View>
+                )}
+
+                {order.status === OrderStatus.CONFIRMED && (
+                  <View style={styles.awaitingPaymentBox}>
+                    <Ionicons name="lock-closed" size={14} color={colors.warningDark} />
+                    <Text style={styles.awaitingPaymentText}>
+                      {language === 'rw'
+                        ? 'Kohereza birafunze: Hagitegerejwe ko umuguzi yishyura muri Escrow mbere yo kohereza (BR-03).'
+                        : 'Dispatch Locked: Awaiting buyer escrow payment confirmation before dispatch (BR-03).'}
+                    </Text>
+                  </View>
+                )}
               </Card>
             );
           })
@@ -246,5 +301,44 @@ const styles = StyleSheet.create({
     ...typography.caption,
     fontSize: 10,
     color: colors.neutralLight,
+  },
+  dispatchActionBox: {
+    marginTop: spacing.sm,
+    padding: spacing.sm,
+    backgroundColor: colors.successLight,
+    borderRadius: radii.sm,
+    borderWidth: 1,
+    borderColor: colors.success,
+    gap: spacing.xs,
+  },
+  escrowNoticeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  escrowNoticeText: {
+    ...typography.caption,
+    fontSize: 11,
+    color: colors.successDark,
+    fontWeight: '600',
+    flex: 1,
+  },
+  awaitingPaymentBox: {
+    marginTop: spacing.sm,
+    padding: spacing.sm,
+    backgroundColor: colors.warningLight,
+    borderRadius: radii.sm,
+    borderWidth: 1,
+    borderColor: colors.warning,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  awaitingPaymentText: {
+    ...typography.caption,
+    fontSize: 11,
+    color: colors.warningDark,
+    fontWeight: '600',
+    flex: 1,
   },
 });
