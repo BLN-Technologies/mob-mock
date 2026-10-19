@@ -19,19 +19,39 @@ export function canTransitionLot(currentStatus: LotStatus, targetStatus: LotStat
       return targetStatus === LotStatus.SUBMITTED;
 
     case LotStatus.SUBMITTED:
+      return (
+        targetStatus === LotStatus.INSPECTION ||
+        targetStatus === LotStatus.VERIFIED ||
+        targetStatus === LotStatus.REJECTED
+      );
+
+    case LotStatus.INSPECTION:
       return targetStatus === LotStatus.VERIFIED || targetStatus === LotStatus.REJECTED;
 
     case LotStatus.VERIFIED:
       return (
         targetStatus === LotStatus.RESERVED ||
+        targetStatus === LotStatus.DELIVERY ||
+        targetStatus === LotStatus.DELIVERED ||
         targetStatus === LotStatus.WITHDRAWN ||
         targetStatus === LotStatus.EXPIRED ||
         targetStatus === LotStatus.SOLD
       );
 
     case LotStatus.RESERVED:
-      // Cancelled order restores to VERIFIED, or completed delivery marks as SOLD
-      return targetStatus === LotStatus.VERIFIED || targetStatus === LotStatus.SOLD;
+      // Cancelled order restores to VERIFIED, or delivery proceeds
+      return (
+        targetStatus === LotStatus.VERIFIED ||
+        targetStatus === LotStatus.DELIVERY ||
+        targetStatus === LotStatus.DELIVERED ||
+        targetStatus === LotStatus.SOLD
+      );
+
+    case LotStatus.DELIVERY:
+      return targetStatus === LotStatus.DELIVERED || targetStatus === LotStatus.VERIFIED;
+
+    case LotStatus.DELIVERED:
+      return targetStatus === LotStatus.SOLD;
 
     case LotStatus.REJECTED:
     case LotStatus.WITHDRAWN:

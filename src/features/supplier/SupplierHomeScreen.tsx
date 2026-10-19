@@ -33,7 +33,7 @@ export const SupplierHomeScreen: React.FC<SupplierHomeScreenProps> = ({
   onNavigateToLots,
   onNavigateToOrders,
 }) => {
-  const { t } = useTranslation();
+  const { t, language } = useTranslation();
   const [lots, setLots] = useState<Lot[]>([]);
   const [orders, setOrders] = useState<Order[]>([]);
   const [refreshing, setRefreshing] = useState(false);
@@ -58,14 +58,24 @@ export const SupplierHomeScreen: React.FC<SupplierHomeScreenProps> = ({
     setRefreshing(false);
   };
 
-  const activeLotsCount = lots.filter(l => l.status === 'VERIFIED' || l.status === 'RESERVED').length;
-  const pendingInspectionCount = lots.filter(l => l.status === 'SUBMITTED').length;
-  const inProgressOrdersCount = orders.filter(o => o.status !== 'SETTLED' && o.status !== 'CANCELLED').length;
-
-  const totalExpectedPayout = orders
-    .filter(o => o.status !== 'CANCELLED')
-    .flatMap(o => o.allocations.filter(a => a.supplierOrgId === user.organizationId))
-    .reduce((sum, a) => sum + a.expectedSupplierPayoutRwf, 0);
+  const totalLotsCount = lots.length;
+  const awaitingInspectionCount = lots.filter(
+    l => l.status === 'SUBMITTED' || (l.status as string) === 'INSPECTION'
+  ).length;
+  // Strictly do not count reserved stock as freely available stock (Section 4.1 & 5.2)
+  const verifiedEligibleStockKg = lots
+    .filter(l => l.status === 'VERIFIED')
+    .reduce((sum, l) => sum + Math.max(0, l.remainingQuantityKg - (l.reservedQuantityKg || 0)), 0);
+  const reservedStockKg = lots.reduce((sum, l) => sum + (l.reservedQuantityKg || 0), 0);
+  const deliveredOrSoldStockKg = orders
+    .flatMap(o =>
+      o.allocations.filter(
+        a =>
+          a.supplierOrgId === user.organizationId &&
+          (o.status === 'DELIVERED' || o.status === 'ACCEPTED' || o.status === 'SETTLED')
+      )
+    )
+    .reduce((sum, a) => sum + a.quantityKg, 0);
 
   return (
     <View style={styles.container}>
@@ -90,7 +100,7 @@ export const SupplierHomeScreen: React.FC<SupplierHomeScreenProps> = ({
                 {t.supplier.greeting}, {user.fullName}
               </Text>
               <Text style={styles.coopName}>
-                {org?.name || 'Cooperative Member'}
+                {org?.name || 'Agricultural Supplier Cooperative'}
               </Text>
             </View>
             <StatusBadge status={org?.verificationStatus || 'VERIFIED'} size="small" />
@@ -100,14 +110,14 @@ export const SupplierHomeScreen: React.FC<SupplierHomeScreenProps> = ({
 
           <View style={styles.heroLocationRow}>
             <View style={styles.heroSubItem}>
-              <Ionicons name="location-outline" size={14} color="#DCFCE7" />
+              <Ionicons name="location-outline" size={14} color="#EAF2EC" />
               <Text style={styles.heroSubText}>
-                {org?.district || 'Eastern Province'}, {org?.sector || 'Rwanda'}
+                {org?.district || 'Nyagatare'}, {org?.sector || 'Karangazi'}
               </Text>
             </View>
             <View style={styles.heroSubItem}>
-              <Ionicons name="shield-checkmark-outline" size={14} color="#DCFCE7" />
-              <Text style={styles.heroSubText}>Reg: {org?.registrationNumber || 'COOP-RCA'}</Text>
+              <Ionicons name="shield-checkmark-outline" size={14} color="#EAF2EC" />
+              <Text style={styles.heroSubText}>Reg: {org?.registrationNumber || 'RCA/2026'}</Text>
             </View>
           </View>
         </View>
@@ -115,36 +125,40 @@ export const SupplierHomeScreen: React.FC<SupplierHomeScreenProps> = ({
         {/* Primary Action Button */}
         <View style={styles.actionContainer}>
           <Button
-            title={t.supplier.declare}
+            title={language === 'rw' ? 'Menyekanisha Umusaruro Wawusaruye' : 'Declare Harvested Lot'}
             onPress={onNavigateToCreateLot}
             size="large"
-            icon={<Ionicons name="add-circle" size={22} color="#FFFFFF" />}
+            icon={<Ionicons name="add-circle" size={20} color="#FFFFFF" />}
             fullWidth
           />
         </View>
 
-        {/* Live Business Overview */}
+        {/* Operational Overview Metrics */}
         <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>{t.supplier.dashboard}</Text>
-          <Text style={styles.sectionSubtitle}>Commercial activity & lot pipeline</Text>
+          <Text style={styles.sectionTitle}>
+            {language === 'rw' ? 'Ibarurishamibare ry\'Ubucuruzi' : 'Warehouse Stock & Lot Operations'}
+          </Text>
+          <Text style={styles.sectionSubtitle}>
+            {language === 'rw' ? 'Imiterere y\'ingano n\'ububiko bwa koperative' : 'Real-time lot pipeline and reserved stock breakdown'}
+          </Text>
         </View>
 
         <View style={styles.metricsGrid}>
-          {/* Active Lots */}
+          {/* Total Lots */}
           <TouchableOpacity
             style={styles.metricCard}
             onPress={onNavigateToLots}
             activeOpacity={0.8}
             accessibilityRole="button"
           >
-            <View style={[styles.metricIconWrap, { backgroundColor: '#DCFCE7' }]}>
-              <Ionicons name="cube" size={20} color={colors.primary} />
+            <View style={[styles.metricIconWrap, { backgroundColor: '#EAF2EC' }]}>
+              <Ionicons name="layers" size={18} color="#174A35" />
             </View>
-            <Text style={styles.metricValue}>{activeLotsCount}</Text>
-            <Text style={styles.metricLabel}>{t.supplier.activeLots}</Text>
+            <Text style={styles.metricValue}>{totalLotsCount}</Text>
+            <Text style={styles.metricLabel}>{language === 'rw' ? 'Yose Hamwe' : 'Total Lots'}</Text>
           </TouchableOpacity>
 
-          {/* Pending Inspection */}
+          {/* Lots Awaiting Inspection */}
           <TouchableOpacity
             style={styles.metricCard}
             onPress={onNavigateToLots}
@@ -152,15 +166,35 @@ export const SupplierHomeScreen: React.FC<SupplierHomeScreenProps> = ({
             accessibilityRole="button"
           >
             <View style={[styles.metricIconWrap, { backgroundColor: '#FEF3C7' }]}>
-              <Ionicons name="time" size={20} color={colors.warningDark} />
+              <Ionicons name="hourglass-outline" size={18} color="#A96812" />
             </View>
-            <Text style={[styles.metricValue, { color: colors.warningDark }]}>
-              {pendingInspectionCount}
+            <Text style={[styles.metricValue, { color: '#A96812' }]}>
+              {awaitingInspectionCount}
             </Text>
-            <Text style={styles.metricLabel}>{t.supplier.pendingInspection}</Text>
+            <Text style={styles.metricLabel}>
+              {language === 'rw' ? 'Ategereje Isuzuma' : 'Awaiting Inspection'}
+            </Text>
           </TouchableOpacity>
 
-          {/* In Progress Orders */}
+          {/* Verified / Available Stock */}
+          <TouchableOpacity
+            style={styles.metricCard}
+            onPress={onNavigateToLots}
+            activeOpacity={0.8}
+            accessibilityRole="button"
+          >
+            <View style={[styles.metricIconWrap, { backgroundColor: '#EAF2EC' }]}>
+              <Ionicons name="checkmark-done" size={18} color="#174A35" />
+            </View>
+            <Text style={[styles.metricValue, { color: '#174A35' }]}>
+              {verifiedEligibleStockKg.toLocaleString()} kg
+            </Text>
+            <Text style={styles.metricLabel}>
+              {language === 'rw' ? 'Wemejwe (Available)' : 'Verified Stock'}
+            </Text>
+          </TouchableOpacity>
+
+          {/* Reserved Stock */}
           <TouchableOpacity
             style={styles.metricCard}
             onPress={onNavigateToOrders}
@@ -168,38 +202,56 @@ export const SupplierHomeScreen: React.FC<SupplierHomeScreenProps> = ({
             accessibilityRole="button"
           >
             <View style={[styles.metricIconWrap, { backgroundColor: '#DBEAFE' }]}>
-              <Ionicons name="cart" size={20} color={colors.infoDark} />
+              <Ionicons name="lock-closed" size={18} color="#2563EB" />
             </View>
-            <Text style={styles.metricValue}>{inProgressOrdersCount}</Text>
-            <Text style={styles.metricLabel}>{t.supplier.ordersInProgress}</Text>
-          </TouchableOpacity>
-
-          {/* Expected Payouts */}
-          <TouchableOpacity
-            style={styles.metricCard}
-            onPress={onNavigateToOrders}
-            activeOpacity={0.8}
-            accessibilityRole="button"
-          >
-            <View style={[styles.metricIconWrap, { backgroundColor: '#F3E8FF' }]}>
-              <Ionicons name="cash" size={20} color="#7E22CE" />
-            </View>
-            <Text style={[styles.metricValue, { fontSize: 15 }]}>
-              {formatRwf(totalExpectedPayout)}
+            <Text style={[styles.metricValue, { color: '#2563EB' }]}>
+              {reservedStockKg.toLocaleString()} kg
             </Text>
-            <Text style={styles.metricLabel}>{t.supplier.expectedPayouts}</Text>
+            <Text style={styles.metricLabel}>
+              {language === 'rw' ? 'Wafashwe (Reserved)' : 'Reserved Stock'}
+            </Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* Delivered / Sold Stock Banner */}
+        <View style={{
+          backgroundColor: '#FFFFFF',
+          borderRadius: 12,
+          padding: 14,
+          flexDirection: 'row',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          marginBottom: 16,
+          borderWidth: 1,
+          borderColor: '#DCE4DD',
+        }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+            <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: '#EAF2EC', alignItems: 'center', justifyContent: 'center' }}>
+              <Ionicons name="cube" size={18} color="#174A35" />
+            </View>
+            <View>
+              <Text style={{ fontSize: 13, fontWeight: '700', color: '#202822' }}>
+                {deliveredOrSoldStockKg > 0 ? deliveredOrSoldStockKg.toLocaleString() + ' kg' : '0 kg'}
+              </Text>
+              <Text style={{ fontSize: 11, color: '#66716A' }}>
+                {language === 'rw' ? 'Umusaruro wamaze kugezwa ku baguzi' : 'Delivered or settled stock'}
+              </Text>
+            </View>
+          </View>
+          <TouchableOpacity onPress={onNavigateToOrders}>
+            <Text style={{ fontSize: 12, fontWeight: '700', color: '#174A35' }}>View Orders</Text>
           </TouchableOpacity>
         </View>
 
         {/* Actions Required / Next Steps Notice */}
-        {pendingInspectionCount > 0 && (
+        {awaitingInspectionCount > 0 && (
           <View style={styles.actionNoticeCard}>
             <View style={styles.actionNoticeHeader}>
               <Ionicons name="information-circle" size={20} color={colors.warningDark} />
               <Text style={styles.actionNoticeTitle}>{t.supplier.actionsRequired}</Text>
             </View>
             <Text style={styles.actionNoticeBody}>
-              {pendingInspectionCount} produce lot(s) await physical moisture and quality grading by an assigned Cargo Field Agent. Keep storage dry and accessible.
+              {awaitingInspectionCount} produce lot(s) await physical moisture and quality grading by an assigned Cargo Field Agent. Keep storage dry and accessible.
             </Text>
           </View>
         )}

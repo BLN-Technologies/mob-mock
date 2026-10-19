@@ -145,6 +145,8 @@ export const rw: typeof import('./en').en = {
     registrationSuccessDesc: 'Konti yawe ya Cargo yamaze kuremwa. Urakomeza kwemeza nimero ya telefone...',
     errFullNameRequired: 'Amazina yose arakenewe',
     errPhoneRequired: 'Nimero ya telefone y\'u Rwanda yemewe irakenewe (urugero: 078... cyangwa +25078...)',
+    errEmailRequired: 'Imeri yemewe irakenewe',
+    confirmPassword: 'Emeza Ijambobanga',
     errOrgRequired: 'Izina rya koperative cyangwa ikigo rirakenewe',
     errDistrictRequired: 'Hitamo akarere ukoreramo',
     errPasswordMin: 'Ijambobanga rigomba kugira byibura inyuguti 6',

@@ -29,6 +29,9 @@ export interface User {
   lastLoginAt?: string;
   onboardingCompleted?: boolean;
   verificationStatus?: VerificationStatus;
+  contactVerified?: boolean;
+  approvalStatus?: 'PENDING' | 'APPROVED' | 'REJECTED';
+  verificationCode?: string;
   agentAssignment?: {
     district: string;
     sector: string;
@@ -61,6 +64,7 @@ export interface Lot {
   supplierId: string;
   organizationId: string;
   cropName: string;
+  cropType?: 'PERISHABLE' | 'NON_PERISHABLE';
   variety?: string;
   totalQuantityKg: number;
   remainingQuantityKg: number;
@@ -83,11 +87,30 @@ export interface Lot {
   updatedAt: string;
 }
 
+// Central Warehouse Stock Group (Aggregated across approved supplier lots)
+export interface WarehouseStockGroup {
+  id: string;
+  cropName: string;
+  variety?: string;
+  cropType: 'PERISHABLE' | 'NON_PERISHABLE';
+  grade: QualityGrade;
+  totalEligibleQuantityKg: number;
+  reservedQuantityKg: number;
+  availableToOrderKg: number;
+  pricePerKgRwf: number;
+  availabilityDate: string;
+  hubLocation: string;
+  photos: string[];
+  contributingLotsCount: number;
+  contributingLotIds: string[];
+}
+
 // Buyer view of a lot, with private supplier identity stripped
 export interface BuyerLotProjection {
   id: string;
   lotCode: string;
   cropName: string;
+  cropType?: 'PERISHABLE' | 'NON_PERISHABLE';
   variety?: string;
   availableQuantityKg: number;
   pricePerKgRwf: number;
@@ -126,6 +149,10 @@ export interface GradingRecord {
   gpsLatitude?: number;
   gpsLongitude?: number;
   gpsAccuracyMeters?: number;
+  checklist?: Record<string, boolean>;
+  submissionTimestamp?: string;
+  editDeadline?: string; // ISO string 5 minutes after submission
+  editHistory?: { editedAt: string; editorId: string; changes: string }[];
   notes: string;
   isOfflineSubmission: boolean;
   syncOperationId?: string;
@@ -391,6 +418,7 @@ export interface InspectionDraft {
   foreignMatter: string;
   defects: string;
   notes: string;
+  checklist?: Record<string, boolean>;
   photos: string[];
   gps?: { lat: number; lng: number };
   updatedAt: string;

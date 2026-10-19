@@ -11,6 +11,8 @@ export type AppDestination =
   | 'WELCOME'
   | 'ROLE_SELECT'
   | 'REGISTER'
+  | 'VERIFICATION'
+  | 'APPROVAL_PENDING'
   | 'AGENT_INVITE'
   | 'LOGIN'
   | 'ONBOARDING_SUPPLIER'
@@ -58,7 +60,36 @@ export function resolveAuthenticatedRoute(
     };
   }
 
-  // 1. Administrator: Strictly routed to Web Operations Portal Handoff
+  // 1. Contact verification check (Step 2 in updated approval flow)
+  if (user.contactVerified === false) {
+    return {
+      destination: 'VERIFICATION',
+      requiresOnboarding: false,
+      isVerificationPending: true,
+      statusNotice: 'Contact verification required',
+    };
+  }
+
+  // 2. Cargo Operations approval check (Step 4 in updated approval flow)
+  if (user.approvalStatus === 'PENDING') {
+    return {
+      destination: 'APPROVAL_PENDING',
+      requiresOnboarding: false,
+      isVerificationPending: false,
+      statusNotice: 'Account awaiting Cargo Operations review and approval',
+    };
+  }
+
+  if (user.approvalStatus === 'REJECTED') {
+    return {
+      destination: 'UNAUTHORIZED',
+      requiresOnboarding: false,
+      isVerificationPending: false,
+      statusNotice: 'Account was not approved by Cargo Operations',
+    };
+  }
+
+  // 3. Administrator: Strictly routed to Web Operations Portal Handoff
   if (user.role === UserRole.ADMINISTRATOR) {
     return {
       destination: 'ADMIN_HANDOFF',
@@ -70,7 +101,7 @@ export function resolveAuthenticatedRoute(
   // Determine onboarding completion status
   const isOnboardingComplete = Boolean(user.onboardingCompleted);
 
-  // 2. Supplier Routing
+  // 4. Supplier Routing
   if (user.role === UserRole.SUPPLIER) {
     if (!isOnboardingComplete) {
       return {
@@ -87,7 +118,7 @@ export function resolveAuthenticatedRoute(
     };
   }
 
-  // 3. Buyer Routing
+  // 5. Buyer Routing
   if (user.role === UserRole.BUYER) {
     if (!isOnboardingComplete) {
       return {
@@ -104,7 +135,7 @@ export function resolveAuthenticatedRoute(
     };
   }
 
-  // 4. Field Agent Routing
+  // 6. Field Inspector Routing
   if (user.role === UserRole.FIELD_AGENT) {
     if (!isOnboardingComplete) {
       return {
@@ -135,6 +166,25 @@ export function resolveAuthenticatedRoute(
 export function canAccessDestination(destination: AppDestination, user: User | null): boolean {
   if (!user) {
     return destination === 'WELCOME' || destination === 'ROLE_SELECT' || destination === 'REGISTER' || destination === 'LOGIN' || destination === 'AGENT_INVITE';
+  }
+
+  // Account locked or suspended guards
+  if (user.isLocked || !user.isActive) {
+    return destination === 'UNAUTHORIZED' || destination === 'WELCOME' || destination === 'LOGIN';
+  }
+
+  // Unverified or Pending Approval users can only access verification/status screens
+  if (user.contactVerified === false || user.approvalStatus === 'PENDING') {
+    return (
+      destination === 'VERIFICATION' ||
+      destination === 'APPROVAL_PENDING' ||
+      destination === 'WELCOME' ||
+      destination === 'LOGIN'
+    );
+  }
+
+  if (destination === 'VERIFICATION' || destination === 'APPROVAL_PENDING') {
+    return true;
   }
 
   switch (destination) {

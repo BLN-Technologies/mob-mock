@@ -1,6 +1,7 @@
 export enum UserRole {
   SUPPLIER = 'SUPPLIER',
   FIELD_AGENT = 'FIELD_AGENT',
+  FIELD_INSPECTOR = 'FIELD_AGENT', // Product alignment alias
   BUYER = 'BUYER',
   ADMINISTRATOR = 'ADMINISTRATOR',
 }
@@ -17,11 +18,20 @@ export enum VerificationStatus {
   SUSPENDED = 'SUSPENDED',
 }
 
+export enum ApprovalStatus {
+  PENDING = 'PENDING',
+  APPROVED = 'APPROVED',
+  REJECTED = 'REJECTED',
+}
+
 export enum LotStatus {
   DRAFT = 'DRAFT',
   SUBMITTED = 'SUBMITTED',
+  INSPECTION = 'INSPECTION',
   VERIFIED = 'VERIFIED',
   RESERVED = 'RESERVED',
+  DELIVERY = 'DELIVERY',
+  DELIVERED = 'DELIVERED',
   SOLD = 'SOLD',
   REJECTED = 'REJECTED',
   WITHDRAWN = 'WITHDRAWN',

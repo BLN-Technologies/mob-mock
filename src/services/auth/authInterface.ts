@@ -74,6 +74,15 @@ export interface AccountOnboardingStatus {
   pendingRequirements: string[];
 }
 
+export interface UnifiedRegistrationInput {
+  fullName: string;
+  phone?: string;
+  email?: string;
+  password?: string;
+  preferredLanguage?: 'en' | 'rw';
+  acceptedTerms: boolean;
+}
+
 export interface ProfileUpdateInput {
   fullName?: string;
   email?: string;
@@ -87,6 +96,18 @@ export interface ProfileUpdateInput {
 export interface IAuthService {
   /** Sign in with phone or email (supports both LoginInput object or string identifier + password) */
   login(inputOrIdentifier: LoginInput | string, password?: string): Promise<AuthResult>;
+
+  /** Register user without role selection (Backend-governed approval flow) */
+  registerAccount(input: UnifiedRegistrationInput): Promise<AuthResult>;
+
+  /** Verify one-time contact verification code */
+  verifyContact(code: string, userId?: string): Promise<{ success: boolean; user: User }>;
+
+  /** Check current Cargo account approval and role assignment status */
+  checkApprovalStatus(userId: string): Promise<{ approvalStatus: 'PENDING' | 'APPROVED' | 'REJECTED'; user: User }>;
+
+  /** Simulate Cargo administrative approval in demo environment */
+  simulateCargoApproval(userId: string, role?: UserRole): Promise<User>;
 
   /** Register a cooperative / agricultural supplier */
   registerSupplier(input: SupplierRegistrationInput): Promise<AuthResult>;

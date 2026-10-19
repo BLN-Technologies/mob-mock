@@ -6,6 +6,7 @@ import {
   ScrollView,
   Alert,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { colors, radii, typography, spacing } from '../../theme/tokens';
 import { useTranslation } from '../../i18n';
 import { Button } from '../../components/ui/Button';
@@ -23,7 +24,7 @@ export const CreateRequestScreen: React.FC<CreateRequestScreenProps> = ({
   onSuccess,
   onCancel,
 }) => {
-  const { t } = useTranslation();
+  const { t, language } = useTranslation();
   const [cropName, setCropName] = useState('Maize');
   const [variety, setVariety] = useState('Nyirakaragaza');
   const [minGrade, setMinGrade] = useState('Grade A');
@@ -49,9 +50,32 @@ export const CreateRequestScreen: React.FC<CreateRequestScreenProps> = ({
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.scrollContent}>
       <View style={styles.headerBox}>
-        <Text style={styles.title}>{t.buyer.postRequest}</Text>
+        <Text style={styles.title}>
+          {language === 'rw' ? 'Saba Umusaruro Wihariye' : 'Request Sourcing'}
+        </Text>
         <Text style={styles.subtitle}>
-          {t.buyer.requestSubtitle}
+          {language === 'rw'
+            ? 'Ubusabe bwo gushakirwa umusaruro wihariye ntabwo buhita bwemeza itumiza; Cargo Operations izabahuza na koperative zibifite maze bikorerwe isuzuma.'
+            : 'A sourcing request communicates desired demand to Cargo Operations. It coordinates eligible supplier lots and schedules inspection; it is distinct from a confirmed stock order.'}
+        </Text>
+      </View>
+
+      <View style={{
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 8,
+        backgroundColor: '#EAF2EC',
+        padding: 12,
+        borderRadius: 10,
+        marginBottom: 16,
+        borderWidth: 1,
+        borderColor: '#DCE4DD',
+      }}>
+        <Ionicons name="information-circle-outline" size={18} color="#174A35" />
+        <Text style={{ fontSize: 12, color: '#174A35', flex: 1, lineHeight: 16 }}>
+          {language === 'rw'
+            ? 'Icyitonderwa: Ubusabe ntiburema umusaruro mu buryo bw\'ako kanya cyangwa ngo bwirengagize igenzura.'
+            : 'Notice: Sourcing requests do not bypass mandatory physical quality inspection or guarantee immediate fulfillment.'}
         </Text>
       </View>
 
@@ -136,7 +160,7 @@ export const CreateRequestScreen: React.FC<CreateRequestScreenProps> = ({
           style={styles.btnHalf}
         />
         <Button
-          title={t.buyer.submitRequest}
+          title={language === 'rw' ? 'Saba Umusaruro' : 'Request stock'}
           onPress={handleSubmit}
           loading={loading}
           style={styles.btnHalf}

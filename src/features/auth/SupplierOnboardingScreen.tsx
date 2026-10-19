@@ -1,23 +1,26 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   ScrollView,
+  KeyboardAvoidingView,
   Platform,
+  TextInput,
+  TouchableOpacity,
+  ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { colors, radii, shadows, typography, spacing } from '../../theme/tokens';
+import { shadows } from '../../theme/tokens';
 import { useTranslation } from '../../i18n';
-import { Button } from '../../components/ui/Button';
 import { User, Organization } from '../../domain/models';
 import { VerificationStatus } from '../../domain/enums';
 
 interface SupplierOnboardingScreenProps {
   user: User;
   organization?: Organization;
-  onComplete: () => void;
+  onComplete: () => Promise<void> | void;
 }
 
 export const SupplierOnboardingScreen: React.FC<SupplierOnboardingScreenProps> = ({
@@ -27,125 +30,173 @@ export const SupplierOnboardingScreen: React.FC<SupplierOnboardingScreenProps> =
 }) => {
   const { t, language } = useTranslation();
 
+  const [orgName, setOrgName] = useState(
+    organization?.name && !organization.name.includes('Organization')
+      ? organization.name
+      : `${user.fullName}'s Cooperative`
+  );
+  const [district, setDistrict] = useState(organization?.district || 'Nyagatare');
+  const [sector, setSector] = useState(organization?.sector || 'Karangazi');
+  const [address, setAddress] = useState('Main Depot / Warehouse Site');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const handleSubmit = async () => {
+    if (loading) return;
+    setError(null);
+
+    if (!orgName.trim()) {
+      setError(
+        language === 'rw'
+          ? 'Izina rya Koperative cyangwa ishyirahamwe rirakenewe.'
+          : 'Cooperative or supplier organization name is required.'
+      );
+      return;
+    }
+
+    setLoading(true);
+    try {
+      if (organization) {
+        organization.name = orgName.trim();
+        organization.district = district.trim();
+        organization.sector = sector.trim();
+      }
+      await onComplete();
+    } catch (err: any) {
+      setError(err.message || 'Failed to complete supplier onboarding.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <SafeAreaView style={styles.safeArea} edges={['top', 'bottom', 'left', 'right']}>
-      <ScrollView
-        contentContainerStyle={styles.scrollContent}
-        showsVerticalScrollIndicator={false}
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
-        <View style={styles.contentWrapper}>
-          {/* Header Badge */}
-          <View style={styles.header}>
-            <View style={styles.badgeWrap}>
-              <Ionicons name="leaf" size={32} color={colors.primary} />
+        <ScrollView
+          contentContainerStyle={styles.scrollContent}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+        >
+          <View style={styles.contentWrapper}>
+            {/* Header */}
+            <View style={styles.header}>
+              <View style={styles.iconCircle}>
+                <Ionicons name="leaf" size={32} color="#174A35" />
+              </View>
+              <Text style={styles.title}>
+                {language === 'rw' ? 'Kwinjiza Amakuru ya Koperative' : 'Supplier Organization Onboarding'}
+              </Text>
+              <Text style={styles.subtitle}>
+                {language === 'rw'
+                  ? 'Kuzuza amakuru y\'ibanze ya Koperative n\'aho iherereye kugira ngo ubashe kumenyekanisha umusaruro no kwakira abagenzuzi.'
+                  : 'Confirm your cooperative or organization details so field inspectors can locate pickup sites and inspect harvest lots.'}
+              </Text>
             </View>
-            <Text style={styles.title}>{t.auth.supplierOnboardingTitle}</Text>
-            <Text style={styles.subtitle}>{t.auth.supplierOnboardingSubtitle}</Text>
-          </View>
 
-          {/* Cooperative Profile Snapshot */}
-          <View style={styles.profileCard}>
-            <View style={styles.profileHeaderRow}>
-              <View>
-                <Text style={styles.profileName}>{user.fullName}</Text>
-                <Text style={styles.profileOrg}>
-                  {organization?.name || 'Registered Cooperative'}
+            {error && (
+              <View style={styles.errorBanner}>
+                <Ionicons name="alert-circle" size={18} color="#B42318" />
+                <Text style={styles.errorText}>{error}</Text>
+              </View>
+            )}
+
+            {/* Form */}
+            <View style={styles.formCard}>
+              <View style={styles.fieldGroup}>
+                <Text style={styles.fieldLabel}>
+                  {language === 'rw' ? 'Izina rya Koperative / Ishyirahamwe' : 'Cooperative / Organization Name'}{' '}
+                  <Text style={styles.required}>*</Text>
                 </Text>
+                <View style={styles.inputWrapper}>
+                  <Ionicons name="people-outline" size={18} color="#66716A" style={styles.inputIcon} />
+                  <TextInput
+                    style={styles.textInput}
+                    value={orgName}
+                    onChangeText={setOrgName}
+                    placeholder="e.g. Koperative Icyerekezo Nyagatare"
+                    placeholderTextColor="#94A3B8"
+                    accessibilityLabel="Cooperative Name"
+                  />
+                </View>
               </View>
-              <View style={[
-                styles.statusPill,
-                organization?.verificationStatus === VerificationStatus.VERIFIED && { backgroundColor: '#DCFCE7' },
-              ]}>
-                <View style={[
-                  styles.statusDot,
-                  organization?.verificationStatus === VerificationStatus.VERIFIED && { backgroundColor: colors.successDark },
-                ]} />
-                <Text style={[
-                  styles.statusText,
-                  organization?.verificationStatus === VerificationStatus.VERIFIED && { color: colors.successDark },
-                ]}>
-                  {organization?.verificationStatus === VerificationStatus.VERIFIED
-                    ? (language === 'rw' ? 'Koperative Yemejwe' : 'Accredited Cooperative')
-                    : (language === 'rw' ? 'Biracyasuzumwa' : 'Accreditation Pending')}
-                </Text>
-              </View>
-            </View>
 
-            <View style={styles.profileMetaRow}>
-              <View style={styles.metaItem}>
-                <Ionicons name="location-outline" size={14} color={colors.neutralGray} />
-                <Text style={styles.metaText}>{organization?.district || 'Rwanda'}</Text>
+              <View style={styles.fieldGroup}>
+                <Text style={styles.fieldLabel}>
+                  {language === 'rw' ? 'Akarere' : 'District'} <Text style={styles.required}>*</Text>
+                </Text>
+                <View style={styles.inputWrapper}>
+                  <Ionicons name="location-outline" size={18} color="#66716A" style={styles.inputIcon} />
+                  <TextInput
+                    style={styles.textInput}
+                    value={district}
+                    onChangeText={setDistrict}
+                    placeholder="Nyagatare"
+                    placeholderTextColor="#94A3B8"
+                    accessibilityLabel="District"
+                  />
+                </View>
               </View>
-              <View style={styles.metaItem}>
-                <Ionicons name="call-outline" size={14} color={colors.neutralGray} />
-                <Text style={styles.metaText}>{user.phone}</Text>
+
+              <View style={styles.fieldGroup}>
+                <Text style={styles.fieldLabel}>
+                  {language === 'rw' ? 'Umurenge' : 'Sector'} <Text style={styles.required}>*</Text>
+                </Text>
+                <View style={styles.inputWrapper}>
+                  <Ionicons name="map-outline" size={18} color="#66716A" style={styles.inputIcon} />
+                  <TextInput
+                    style={styles.textInput}
+                    value={sector}
+                    onChangeText={setSector}
+                    placeholder="Karangazi"
+                    placeholderTextColor="#94A3B8"
+                    accessibilityLabel="Sector"
+                  />
+                </View>
               </View>
+
+              <View style={styles.fieldGroup}>
+                <Text style={styles.fieldLabel}>
+                  {language === 'rw' ? 'Icyicaro cy\'Ububiko / Ahakirirwa Umusaruro' : 'Pickup Site / Warehouse Location'}
+                </Text>
+                <View style={styles.inputWrapper}>
+                  <Ionicons name="home-outline" size={18} color="#66716A" style={styles.inputIcon} />
+                  <TextInput
+                    style={styles.textInput}
+                    value={address}
+                    onChangeText={setAddress}
+                    placeholder="e.g. Central Warehouse, Nyagatare Town"
+                    placeholderTextColor="#94A3B8"
+                    accessibilityLabel="Pickup Site"
+                  />
+                </View>
+              </View>
+
+              {/* Submit */}
+              <TouchableOpacity
+                style={[styles.primaryButton, loading && styles.buttonDisabled]}
+                onPress={handleSubmit}
+                disabled={loading}
+                activeOpacity={0.85}
+                accessibilityRole="button"
+              >
+                {loading ? (
+                  <ActivityIndicator size="small" color="#FFFFFF" />
+                ) : (
+                  <>
+                    <Text style={styles.primaryButtonText}>
+                      {language === 'rw' ? 'Emeza Ukomeze ku Dashboard' : 'Save & Enter Dashboard'}
+                    </Text>
+                    <Ionicons name="arrow-forward" size={18} color="#FFFFFF" />
+                  </>
+                )}
+              </TouchableOpacity>
             </View>
           </View>
-
-          {/* Onboarding Roadmap */}
-          <View style={styles.roadmapCard}>
-            <Text style={styles.roadmapTitle}>
-              {language === 'rw' ? 'Intambwe zo Gutangira Gucuruza' : 'Next Steps to Trade'}
-            </Text>
-
-            {/* Step 1 */}
-            <View style={styles.stepRow}>
-              <View style={[styles.stepIconWrap, { backgroundColor: '#DCFCE7' }]}>
-                <Ionicons name="checkmark-done" size={18} color={colors.primary} />
-              </View>
-              <View style={styles.stepContent}>
-                <Text style={styles.stepHeading}>{t.auth.supplierStep1Title}</Text>
-                <Text style={styles.stepBody}>{t.auth.supplierStep1Desc}</Text>
-              </View>
-            </View>
-
-            {/* Step 2 */}
-            <View style={styles.stepRow}>
-              <View style={[
-                styles.stepIconWrap,
-                { backgroundColor: organization?.verificationStatus === VerificationStatus.VERIFIED ? '#DCFCE7' : '#FEF3C7' },
-              ]}>
-                <Ionicons
-                  name={organization?.verificationStatus === VerificationStatus.VERIFIED ? 'checkmark-done' : 'hourglass-outline'}
-                  size={18}
-                  color={organization?.verificationStatus === VerificationStatus.VERIFIED ? colors.primary : colors.warningDark}
-                />
-              </View>
-              <View style={styles.stepContent}>
-                <Text style={styles.stepHeading}>{t.auth.supplierStep2Title}</Text>
-                <Text style={styles.stepBody}>
-                  {organization?.verificationStatus === VerificationStatus.VERIFIED
-                    ? (language === 'rw'
-                        ? 'Koperative yawe yemejwe n’ubuyobozi bwa Cargo. Ushobora kumenyekanisha umusaruro.'
-                        : 'Cooperative accreditation approved by Cargo Operations. You are authorized to declare harvest lots.')
-                    : t.auth.supplierStep2Desc}
-                </Text>
-              </View>
-            </View>
-
-            {/* Step 3 */}
-            <View style={styles.stepRow}>
-              <View style={[styles.stepIconWrap, { backgroundColor: '#DBEAFE' }]}>
-                <Ionicons name="cube-outline" size={18} color={colors.infoDark} />
-              </View>
-              <View style={styles.stepContent}>
-                <Text style={styles.stepHeading}>{t.auth.supplierStep3Title}</Text>
-                <Text style={styles.stepBody}>{t.auth.supplierStep3Desc}</Text>
-              </View>
-            </View>
-          </View>
-
-          {/* Primary Action Button */}
-          <Button
-            title={t.auth.goToSupplierDashboard}
-            onPress={onComplete}
-            size="large"
-            fullWidth
-            style={styles.actionBtn}
-          />
-        </View>
-      </ScrollView>
+        </ScrollView>
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 };
@@ -153,14 +204,12 @@ export const SupplierOnboardingScreen: React.FC<SupplierOnboardingScreenProps> =
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: colors.primaryDark,
+    backgroundColor: '#F7F8F5',
   },
   scrollContent: {
-    flexGrow: 1,
-    paddingHorizontal: spacing.lg,
-    paddingTop: Platform.OS === 'android' ? spacing.lg : spacing.md,
-    paddingBottom: spacing.xxl,
+    padding: 24,
     alignItems: 'center',
+    flexGrow: 1,
   },
   contentWrapper: {
     width: '100%',
@@ -168,142 +217,102 @@ const styles = StyleSheet.create({
   },
   header: {
     alignItems: 'center',
-    marginBottom: spacing.lg,
+    marginBottom: 20,
   },
-  badgeWrap: {
+  iconCircle: {
     width: 64,
     height: 64,
     borderRadius: 32,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#EAF2EC',
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: spacing.sm,
-    ...shadows.md,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: '#DCE4DD',
   },
   title: {
-    ...typography.h2,
     fontSize: 22,
-    color: '#FFFFFF',
     fontWeight: '800',
+    color: '#202822',
     textAlign: 'center',
   },
   subtitle: {
-    ...typography.caption,
     fontSize: 13,
-    color: '#DCFCE7',
+    color: '#66716A',
     textAlign: 'center',
-    marginTop: 4,
+    marginTop: 6,
     lineHeight: 18,
   },
-  profileCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: radii.xl,
-    padding: spacing.md + 2,
-    marginBottom: spacing.md,
-    ...shadows.md,
-  },
-  profileHeaderRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginBottom: spacing.sm,
-  },
-  profileName: {
-    ...typography.bodyMedium,
-    fontSize: 15,
-    fontWeight: '800',
-    color: colors.neutralHeadings,
-  },
-  profileOrg: {
-    ...typography.caption,
-    fontSize: 12,
-    color: colors.primary,
-    fontWeight: '600',
-    marginTop: 1,
-  },
-  statusPill: {
+  errorBanner: {
+    backgroundColor: '#FEE2E2',
+    borderColor: '#FCA5A5',
+    borderWidth: 1,
+    borderRadius: 10,
+    padding: 12,
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#FEF3C7',
-    paddingVertical: 3,
-    paddingHorizontal: 8,
-    borderRadius: radii.full,
-    gap: 4,
+    gap: 8,
+    marginBottom: 16,
   },
-  statusDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: colors.warningDark,
-  },
-  statusText: {
-    ...typography.caption,
-    fontSize: 10,
-    fontWeight: '700',
-    color: colors.warningDark,
-  },
-  profileMetaRow: {
-    flexDirection: 'row',
-    gap: spacing.md,
-    borderTopWidth: 1,
-    borderTopColor: colors.borderLight,
-    paddingTop: spacing.xs + 2,
-  },
-  metaItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  metaText: {
-    ...typography.caption,
-    fontSize: 11,
-    color: colors.neutralGray,
-  },
-  roadmapCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: radii.xl,
-    padding: spacing.lg,
-    marginBottom: spacing.xl,
-    ...shadows.md,
-  },
-  roadmapTitle: {
-    ...typography.h3,
-    fontSize: 15,
-    color: colors.neutralHeadings,
-    fontWeight: '800',
-    marginBottom: spacing.md,
-  },
-  stepRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: spacing.sm + 2,
-    marginBottom: spacing.md,
-  },
-  stepIconWrap: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: 2,
-  },
-  stepContent: {
+  errorText: {
+    fontSize: 13,
+    color: '#B42318',
     flex: 1,
   },
-  stepHeading: {
-    ...typography.bodyMedium,
+  formCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: 20,
+    borderWidth: 1,
+    borderColor: '#DCE4DD',
+    ...shadows.sm,
+    gap: 16,
+  },
+  fieldGroup: {
+    gap: 6,
+  },
+  fieldLabel: {
     fontSize: 13,
+    fontWeight: '600',
+    color: '#202822',
+  },
+  required: {
+    color: '#B42318',
+  },
+  inputWrapper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F7F8F5',
+    borderWidth: 1,
+    borderColor: '#DCE4DD',
+    borderRadius: 10,
+    paddingHorizontal: 12,
+  },
+  inputIcon: {
+    marginRight: 8,
+  },
+  textInput: {
+    flex: 1,
+    paddingVertical: 12,
+    fontSize: 14,
+    color: '#202822',
+  },
+  primaryButton: {
+    backgroundColor: '#174A35',
+    borderRadius: 12,
+    paddingVertical: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    marginTop: 8,
+  },
+  buttonDisabled: {
+    opacity: 0.65,
+  },
+  primaryButtonText: {
+    fontSize: 15,
     fontWeight: '700',
-    color: colors.neutralHeadings,
-  },
-  stepBody: {
-    ...typography.caption,
-    fontSize: 11,
-    color: colors.neutralGray,
-    marginTop: 2,
-    lineHeight: 15,
-  },
-  actionBtn: {
-    marginTop: spacing.xs,
+    color: '#FFFFFF',
   },
 });

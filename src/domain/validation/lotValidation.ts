@@ -1,5 +1,6 @@
 export interface LotValidationInput {
   cropName: string;
+  cropType?: 'PERISHABLE' | 'NON_PERISHABLE';
   variety?: string;
   totalQuantityKg: number;
   pricePerKgRwf: number;

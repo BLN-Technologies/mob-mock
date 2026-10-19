@@ -9,15 +9,16 @@ import {
   Modal,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { colors, radii, shadows, typography, spacing } from '../../theme/tokens';
+import { colors, radii, typography, spacing } from '../../theme/tokens';
 import { useTranslation, Language } from '../../i18n';
+import { useTheme, ThemeMode } from '../../theme/ThemeContext';
 import { Card } from '../../components/ui/Card';
 import { Button } from '../../components/ui/Button';
 import { StatusBadge } from '../../components/ui/StatusBadge';
 import { FormField } from '../../components/forms/FormField';
 import { authService, mockState } from '../../services/mock/mockServices';
 import { localStorage } from '../../data/local/storage';
-import { User } from '../../domain/models';
+import { User, Organization } from '../../domain/models';
 
 interface ProfileScreenProps {
   user: User;
@@ -33,6 +34,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
   onUserUpdated,
 }) => {
   const { t, language, setLanguage } = useTranslation();
+  const { mode: themeMode, setThemeMode, colors: tc } = useTheme();
   const org = authService.getUserOrganization(user);
   const [resetting, setResetting] = useState(false);
 
@@ -42,6 +44,12 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
   const [editPhone, setEditPhone] = useState(user.phone);
   const [editError, setEditError] = useState('');
   const [savingEdit, setSavingEdit] = useState(false);
+
+  // Edit Organization Address state
+  const [isEditingOrg, setIsEditingOrg] = useState(false);
+  const [editDistrict, setEditDistrict] = useState(org?.district || '');
+  const [editSector, setEditSector] = useState(org?.sector || '');
+  const [currentOrg, setCurrentOrg] = useState<Organization | undefined>(org);
 
   const handleLanguageToggle = async (newLang: Language) => {
     await setLanguage(newLang);
@@ -74,6 +82,18 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
     }
 
     Alert.alert(t.common.appName, t.profile.profileUpdated);
+  };
+
+  const handleSaveOrgAddress = async () => {
+    if (!currentOrg) return;
+    const updatedOrg = {
+      ...currentOrg,
+      district: editDistrict.trim() || currentOrg.district,
+      sector: editSector.trim() || currentOrg.sector,
+    };
+    setCurrentOrg(updatedOrg);
+    setIsEditingOrg(false);
+    Alert.alert(t.common.appName, 'Organization location updated successfully.');
   };
 
   const handleResetData = () => {
@@ -112,73 +132,156 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
     ]);
   };
 
+  const userInitials = user.fullName
+    ? user.fullName
+        .split(' ')
+        .map(n => n.charAt(0))
+        .slice(0, 2)
+        .join('')
+        .toUpperCase()
+    : 'U';
+
+  const orgInitials = currentOrg?.name
+    ? currentOrg.name
+        .split(' ')
+        .map(n => n.charAt(0))
+        .slice(0, 2)
+        .join('')
+        .toUpperCase()
+    : 'CO';
+
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor: tc.background }]}>
       <ScrollView contentContainerStyle={styles.scrollContent}>
         {/* Executive Header Card */}
         <View style={styles.headerCard}>
           <View style={styles.headerTop}>
             <View style={styles.avatar}>
-              <Text style={styles.avatarText}>{user.fullName.charAt(0).toUpperCase()}</Text>
+              <Text style={styles.avatarText}>{userInitials}</Text>
             </View>
             <View style={styles.headerMeta}>
-              <Text style={styles.userName}>{user.fullName}</Text>
+              <View style={styles.nameRow}>
+                <Text style={styles.userName}>{user.fullName}</Text>
+                {/* Compact accessible edit icon button */}
+                <TouchableOpacity
+                  style={styles.compactEditBtn}
+                  onPress={() => {
+                    setEditName(user.fullName);
+                    setEditPhone(user.phone);
+                    setIsEditing(true);
+                  }}
+                  accessibilityRole="button"
+                  accessibilityLabel="Edit personal details"
+                >
+                  <Ionicons name="pencil" size={14} color={colors.primary} />
+                </TouchableOpacity>
+              </View>
               <Text style={styles.userRole}>
                 {(t.roles as any)[user.role] || user.role}
               </Text>
-              <Text style={styles.userPhone}>{user.phone}</Text>
+              <Text style={styles.userPhone}>{user.phone || user.email}</Text>
             </View>
           </View>
 
           <View style={styles.headerActionRow}>
-            <StatusBadge status={org?.verificationStatus || 'VERIFIED'} size="small" />
-            <Button
-              title={t.profile.editProfile}
-              onPress={() => {
-                setEditName(user.fullName);
-                setEditPhone(user.phone);
-                setIsEditing(true);
-              }}
-              variant="outline"
-              size="small"
-              icon={<Ionicons name="create-outline" size={15} color={colors.primary} />}
-            />
+            <StatusBadge status={currentOrg?.verificationStatus || 'VERIFIED'} size="small" />
+            <Text style={styles.accountVerifiedText}>
+              {user.contactVerified ? 'Contact Verified · Cargo Approved' : 'Verified Cargo Member'}
+            </Text>
           </View>
         </View>
 
         {/* Organization / Cooperative Information */}
-        {org && (
+        {currentOrg && (
           <Card style={styles.sectionCard}>
             <View style={styles.cardHeaderRow}>
               <View style={styles.cardHeaderLeft}>
-                <Ionicons name="business-outline" size={18} color={colors.primary} />
-                <Text style={styles.cardSectionTitle}>{t.profile.organization}</Text>
+                <View style={styles.orgAvatar}>
+                  <Text style={styles.orgAvatarText}>{orgInitials}</Text>
+                </View>
+                <View style={styles.orgTitleWrap}>
+                  <Text style={styles.cardSectionTitle}>{t.profile.organization}</Text>
+                  <Text style={styles.orgName}>{currentOrg.name}</Text>
+                </View>
               </View>
-              <StatusBadge status={org.verificationStatus} size="small" />
+              <TouchableOpacity
+                style={styles.compactEditBtn}
+                onPress={() => {
+                  setEditDistrict(currentOrg.district);
+                  setEditSector(currentOrg.sector);
+                  setIsEditingOrg(true);
+                }}
+                accessibilityRole="button"
+                accessibilityLabel="Edit organization address"
+              >
+                <Ionicons name="pencil" size={14} color={colors.primary} />
+              </TouchableOpacity>
             </View>
-
-            <Text style={styles.orgName}>{org.name}</Text>
 
             <View style={styles.orgMetaGrid}>
               <View style={styles.orgMetaItem}>
                 <Text style={styles.metaLabel}>Reg No</Text>
-                <Text style={styles.metaVal}>{org.registrationNumber}</Text>
+                <Text style={styles.metaVal}>{currentOrg.registrationNumber || 'RCA-2026-001'}</Text>
               </View>
-              {org.tin && (
+              {currentOrg.tin && (
                 <View style={styles.orgMetaItem}>
                   <Text style={styles.metaLabel}>TIN</Text>
-                  <Text style={styles.metaVal}>{org.tin}</Text>
+                  <Text style={styles.metaVal}>{currentOrg.tin}</Text>
                 </View>
               )}
               <View style={styles.orgMetaItem}>
                 <Text style={styles.metaLabel}>Location</Text>
                 <Text style={styles.metaVal}>
-                  {org.district}, {org.sector}
+                  {currentOrg.district}, {currentOrg.sector}
                 </Text>
               </View>
             </View>
           </Card>
         )}
+
+        {/* Theme Preference Selection */}
+        <Card style={styles.sectionCard}>
+          <View style={styles.cardHeaderRow}>
+            <View style={styles.cardHeaderLeft}>
+              <Ionicons name="moon-outline" size={18} color={colors.primary} />
+              <Text style={styles.cardSectionTitle}>Appearance & Theme</Text>
+            </View>
+          </View>
+
+          <View style={styles.themeGrid}>
+            {(['system', 'light', 'dark'] as ThemeMode[]).map(modeOpt => {
+              const isActive = themeMode === modeOpt;
+              return (
+                <TouchableOpacity
+                  key={modeOpt}
+                  style={[styles.themeBtn, isActive && styles.themeBtnActive]}
+                  onPress={() => setThemeMode(modeOpt)}
+                  activeOpacity={0.8}
+                  accessibilityRole="button"
+                  accessibilityLabel={`${modeOpt} theme`}
+                >
+                  <Ionicons
+                    name={
+                      modeOpt === 'system'
+                        ? 'phone-portrait-outline'
+                        : modeOpt === 'light'
+                        ? 'sunny-outline'
+                        : 'moon-outline'
+                    }
+                    size={16}
+                    color={isActive ? colors.primary : colors.neutralGray}
+                  />
+                  <Text style={[styles.themeBtnText, isActive && styles.themeBtnTextActive]}>
+                    {modeOpt.charAt(0).toUpperCase() + modeOpt.slice(1)}
+                  </Text>
+                  {isActive && (
+                    <Ionicons name="checkmark-circle" size={14} color={colors.primary} />
+                  )}
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        </Card>
 
         {/* Language Selection Card */}
         <Card style={styles.sectionCard}>
@@ -236,11 +339,47 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
           <Text style={styles.supportDetailHighlight}>{t.profile.supportPhone}</Text>
         </Card>
 
+        {/* Legal & Compliance Links */}
+        <Card style={styles.sectionCard}>
+          <View style={styles.cardHeaderRow}>
+            <View style={styles.cardHeaderLeft}>
+              <Ionicons name="shield-checkmark-outline" size={18} color={colors.primary} />
+              <Text style={styles.cardSectionTitle}>Legal & Data Privacy</Text>
+            </View>
+          </View>
+
+          <TouchableOpacity
+            style={styles.legalRow}
+            onPress={() =>
+              Alert.alert(
+                'Terms of Service',
+                'Cargo Mobile operates under approved Rwanda agricultural trade regulations (BR-01, BR-02, BR-03, BR-04, BR-05).'
+              )
+            }
+          >
+            <Text style={styles.legalLink}>Terms of Service</Text>
+            <Ionicons name="chevron-forward" size={16} color={colors.neutralGray} />
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.legalRow}
+            onPress={() =>
+              Alert.alert(
+                'Privacy Policy',
+                'Cargo guarantees full farmer privacy. Private contact numbers and farm coordinates are never exposed to buyers (BR-05).'
+              )
+            }
+          >
+            <Text style={styles.legalLink}>Privacy Policy (BR-05 Farmer Protection)</Text>
+            <Ionicons name="chevron-forward" size={16} color={colors.neutralGray} />
+          </TouchableOpacity>
+        </Card>
+
         {/* Demo Actions & Reset */}
         <Card style={styles.sectionCard}>
           <View style={styles.cardHeaderRow}>
             <View style={styles.cardHeaderLeft}>
-              <Ionicons name="refresh-circle-outline" size={18} color={colors.warningDark} />
+              <Ionicons name="refresh-circle-outline" size={18} color={colors.warning} />
               <Text style={styles.cardSectionTitle}>{t.profile.demoActions}</Text>
             </View>
           </View>
@@ -252,7 +391,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
             onPress={handleResetData}
             variant="secondary"
             loading={resetting}
-            icon={<Ionicons name="reload" size={16} color={colors.neutralDark} />}
+            icon={<Ionicons name="reload" size={16} color={colors.neutralHeadings} />}
             style={styles.resetButton}
           />
         </Card>
@@ -283,7 +422,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>{t.profile.editProfile}</Text>
               <TouchableOpacity onPress={() => setIsEditing(false)}>
-                <Ionicons name="close" size={22} color={colors.neutralDark} />
+                <Ionicons name="close" size={22} color={colors.neutralHeadings} />
               </TouchableOpacity>
             </View>
 
@@ -298,23 +437,71 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
               label={t.profile.phoneNumber}
               value={editPhone}
               onChangeText={setEditPhone}
-              placeholder="078..."
+              placeholder="e.g. +250 788 000 000"
               keyboardType="phone-pad"
-              error={editError}
             />
 
-            <View style={styles.modalActionRow}>
+            {editError ? <Text style={styles.editErrorText}>{editError}</Text> : null}
+
+            <View style={styles.modalActions}>
               <Button
                 title={t.common.cancel}
                 onPress={() => setIsEditing(false)}
-                variant="secondary"
-                style={{ flex: 1 }}
+                variant="outline"
+                style={styles.modalBtn}
               />
               <Button
-                title={savingEdit ? t.common.loading : t.common.save}
+                title={t.common.save}
                 onPress={handleSaveProfile}
                 loading={savingEdit}
-                style={{ flex: 1 }}
+                style={styles.modalBtn}
+              />
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Edit Organization Modal */}
+      <Modal
+        visible={isEditingOrg}
+        animationType="slide"
+        transparent
+        onRequestClose={() => setIsEditingOrg(false)}
+      >
+        <View style={styles.modalBackdrop}>
+          <View style={styles.modalCard}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Edit Organization Location</Text>
+              <TouchableOpacity onPress={() => setIsEditingOrg(false)}>
+                <Ionicons name="close" size={22} color={colors.neutralHeadings} />
+              </TouchableOpacity>
+            </View>
+
+            <FormField
+              label="District"
+              value={editDistrict}
+              onChangeText={setEditDistrict}
+              placeholder="e.g. Nyagatare"
+            />
+
+            <FormField
+              label="Sector"
+              value={editSector}
+              onChangeText={setEditSector}
+              placeholder="e.g. Katabagemu"
+            />
+
+            <View style={styles.modalActions}>
+              <Button
+                title={t.common.cancel}
+                onPress={() => setIsEditingOrg(false)}
+                variant="outline"
+                style={styles.modalBtn}
+              />
+              <Button
+                title={t.common.save}
+                onPress={handleSaveOrgAddress}
+                style={styles.modalBtn}
               />
             </View>
           </View>
@@ -331,50 +518,60 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     padding: spacing.md,
-    paddingBottom: spacing.xxxl + 20,
+    paddingBottom: spacing.xxxl + 30,
   },
   headerCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: radii.lg,
-    padding: spacing.lg,
+    backgroundColor: colors.white,
+    padding: spacing.md,
+    borderRadius: radii.md,
     marginBottom: spacing.md,
     borderWidth: 1,
     borderColor: colors.border,
-    ...shadows.subtle,
   },
   headerTop: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: spacing.md,
+    marginBottom: spacing.sm,
   },
   avatar: {
-    width: 54,
-    height: 54,
-    borderRadius: 27,
-    backgroundColor: colors.primaryDark,
-    alignItems: 'center',
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    backgroundColor: colors.surfaceMint,
     justifyContent: 'center',
-    marginRight: spacing.md,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: colors.primary + '30',
   },
   avatarText: {
-    fontSize: 22,
-    fontWeight: '800',
-    color: '#FFFFFF',
+    ...typography.h2,
+    fontSize: 20,
+    color: colors.primary,
   },
   headerMeta: {
+    marginLeft: spacing.md,
     flex: 1,
   },
+  nameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+  },
   userName: {
-    ...typography.h2,
-    fontSize: 18,
+    ...typography.h3,
+    fontSize: 17,
     color: colors.neutralHeadings,
+  },
+  compactEditBtn: {
+    padding: 6,
+    backgroundColor: colors.surfaceMint,
+    borderRadius: radii.full,
   },
   userRole: {
     ...typography.caption,
-    fontSize: 12,
     color: colors.primary,
-    fontWeight: '700',
-    marginTop: 2,
+    fontWeight: '600',
+    marginTop: 1,
   },
   userPhone: {
     ...typography.caption,
@@ -385,9 +582,14 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingTop: spacing.sm,
+    paddingTop: spacing.xs + 4,
     borderTopWidth: 1,
     borderTopColor: colors.borderLight,
+  },
+  accountVerifiedText: {
+    ...typography.caption,
+    fontSize: 11,
+    color: colors.neutralLight,
   },
   sectionCard: {
     marginBottom: spacing.md,
@@ -401,43 +603,88 @@ const styles = StyleSheet.create({
   cardHeaderLeft: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.xs,
+    gap: spacing.xs + 2,
+    flex: 1,
   },
   cardSectionTitle: {
-    ...typography.caption,
-    fontSize: 12,
-    fontWeight: '700',
+    ...typography.h3,
+    fontSize: 14,
     color: colors.neutralHeadings,
-    textTransform: 'uppercase',
+  },
+  orgAvatar: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: colors.surfaceMint,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  orgAvatarText: {
+    ...typography.caption,
+    fontWeight: 'bold',
+    color: colors.primary,
+    fontSize: 12,
+  },
+  orgTitleWrap: {
+    marginLeft: spacing.xs,
   },
   orgName: {
-    ...typography.h3,
-    fontSize: 15,
+    ...typography.body,
+    fontSize: 14,
     color: colors.neutralHeadings,
-    marginBottom: spacing.sm,
+    fontWeight: '700',
   },
   orgMetaGrid: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: spacing.sm,
-    backgroundColor: colors.surfaceSubtle,
-    borderRadius: radii.md,
-    padding: spacing.sm + 2,
+    backgroundColor: colors.background,
+    borderRadius: radii.sm,
+    padding: spacing.sm,
+    marginTop: spacing.xs,
+    justifyContent: 'space-around',
   },
   orgMetaItem: {
-    width: '46%',
+    alignItems: 'center',
   },
   metaLabel: {
     ...typography.caption,
-    fontSize: 10,
+    fontSize: 11,
     color: colors.neutralGray,
   },
   metaVal: {
-    ...typography.caption,
+    ...typography.body,
     fontSize: 12,
-    fontWeight: '700',
-    color: colors.neutralDark,
-    marginTop: 1,
+    fontWeight: '600',
+    color: colors.neutralHeadings,
+    marginTop: 2,
+  },
+  themeGrid: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+    marginTop: spacing.xs,
+  },
+  themeBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: spacing.sm,
+    borderRadius: radii.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.white,
+    gap: 6,
+  },
+  themeBtnActive: {
+    borderColor: colors.primary,
+    backgroundColor: colors.surfaceMint,
+  },
+  themeBtnText: {
+    ...typography.caption,
+    fontWeight: '600',
+    color: colors.neutralGray,
+  },
+  themeBtnTextActive: {
+    color: colors.primary,
   },
   langGrid: {
     flexDirection: 'row',
@@ -449,52 +696,61 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: spacing.md,
-    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.sm,
     borderRadius: radii.md,
-    borderWidth: 1.5,
+    borderWidth: 1,
     borderColor: colors.border,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.white,
     gap: spacing.xs,
   },
   langBtnActive: {
     borderColor: colors.primary,
-    backgroundColor: colors.surfaceHighlighted,
+    backgroundColor: colors.surfaceMint,
   },
   flagText: {
-    fontSize: 18,
+    fontSize: 16,
   },
   langBtnText: {
     ...typography.caption,
-    fontSize: 13,
     fontWeight: '600',
-    color: colors.neutralDark,
+    color: colors.neutralGray,
   },
   langBtnTextActive: {
     color: colors.primary,
-    fontWeight: '700',
   },
   supportTitle: {
-    ...typography.bodyMedium,
-    fontSize: 14,
-    fontWeight: '700',
+    ...typography.body,
+    fontWeight: 'bold',
+    fontSize: 13,
     color: colors.neutralHeadings,
-    marginBottom: 2,
   },
   supportDetail: {
     ...typography.caption,
     color: colors.neutralGray,
-    marginBottom: 4,
+    marginTop: 2,
   },
   supportDetailHighlight: {
     ...typography.caption,
-    fontWeight: '700',
     color: colors.primary,
+    fontWeight: '600',
+    marginTop: 4,
+  },
+  legalRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: spacing.sm,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.borderLight,
+  },
+  legalLink: {
+    ...typography.body,
+    fontSize: 13,
+    color: colors.neutralHeadings,
   },
   resetExplanation: {
     ...typography.caption,
     color: colors.neutralGray,
-    lineHeight: 16,
     marginBottom: spacing.sm,
   },
   resetButton: {
@@ -502,25 +758,24 @@ const styles = StyleSheet.create({
   },
   logoutWrapper: {
     marginTop: spacing.md,
-    marginBottom: spacing.xxl,
+    alignItems: 'center',
   },
   appVersionText: {
     ...typography.caption,
-    textAlign: 'center',
     color: colors.neutralLight,
-    marginTop: spacing.md,
+    marginTop: spacing.sm,
+    fontSize: 11,
   },
   modalBackdrop: {
     flex: 1,
-    backgroundColor: 'rgba(15, 23, 42, 0.5)',
+    backgroundColor: 'rgba(0,0,0,0.5)',
     justifyContent: 'center',
-    padding: spacing.lg,
+    padding: spacing.md,
   },
   modalCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: radii.lg,
+    backgroundColor: colors.white,
+    borderRadius: radii.md,
     padding: spacing.lg,
-    ...shadows.lg,
   },
   modalHeader: {
     flexDirection: 'row',
@@ -533,9 +788,17 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: colors.neutralHeadings,
   },
-  modalActionRow: {
+  editErrorText: {
+    ...typography.caption,
+    color: colors.error,
+    marginBottom: spacing.sm,
+  },
+  modalActions: {
     flexDirection: 'row',
     gap: spacing.sm,
     marginTop: spacing.md,
+  },
+  modalBtn: {
+    flex: 1,
   },
 });

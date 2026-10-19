@@ -8,6 +8,7 @@ import {
   Platform,
   TouchableOpacity,
   Modal,
+  TextInput,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -33,6 +34,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
   const { t, language, setLanguage } = useTranslation();
   const [identifier, setIdentifier] = useState('+250788111222');
   const [password, setPassword] = useState('password123');
+  const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showOtp, setShowOtp] = useState(false);
@@ -163,18 +165,59 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
                 value={identifier}
                 onChangeText={setIdentifier}
                 autoCapitalize="none"
-                placeholder="+250 788..."
-                icon="call-outline"
+                placeholder="+250 788... or email"
+                icon="person-outline"
               />
 
-              <FormField
-                label={t.auth.password}
-                value={password}
-                onChangeText={setPassword}
-                secureTextEntry
-                placeholder="••••••••"
-                icon="lock-closed-outline"
-              />
+              <View style={{ marginBottom: spacing.md }}>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                  <Text style={{ fontSize: 13, fontWeight: '600', color: colors.neutralHeadings }}>
+                    {t.auth.password}
+                  </Text>
+                  <TouchableOpacity
+                    onPress={() => {
+                      setError(
+                        language === 'rw'
+                          ? 'Gusubiza ijambobanga ricungwa n\'ubuyobozi bwa Cargo. Hamagara umurongo utishyurwa +250 788 000 000 cyangwa andikira support@cargo.rw.'
+                          : 'Password recovery is managed securely by Cargo Operations. Contact support@cargo.rw or call +250 788 000 000.'
+                      );
+                    }}
+                    hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                  >
+                    <Text style={{ fontSize: 12, fontWeight: '600', color: '#174A35' }}>
+                      {language === 'rw' ? 'Wibagiwe ijambobanga?' : 'Forgot password?'}
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+
+                <View style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  backgroundColor: '#F7F8F5',
+                  borderWidth: 1,
+                  borderColor: '#DCE4DD',
+                  borderRadius: 10,
+                  paddingHorizontal: 12,
+                }}>
+                  <Ionicons name="lock-closed-outline" size={18} color="#66716A" style={{ marginRight: 8 }} />
+                  <TextInput
+                    style={{ flex: 1, paddingVertical: 12, fontSize: 14, color: '#202822' }}
+                    value={password}
+                    onChangeText={setPassword}
+                    placeholder="••••••••"
+                    placeholderTextColor="#94A3B8"
+                    secureTextEntry={!showPassword}
+                    accessibilityLabel={t.auth.password}
+                  />
+                  <TouchableOpacity
+                    onPress={() => setShowPassword(p => !p)}
+                    style={{ padding: 6 }}
+                    accessibilityLabel={showPassword ? 'Hide password' : 'Show password'}
+                  >
+                    <Ionicons name={showPassword ? 'eye-off-outline' : 'eye-outline'} size={18} color="#66716A" />
+                  </TouchableOpacity>
+                </View>
+              </View>
 
               <Button
                 title={loading ? t.auth.loggingIn : t.auth.login}

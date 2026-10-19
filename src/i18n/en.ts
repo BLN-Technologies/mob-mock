@@ -145,6 +145,8 @@ export const en = {
     registrationSuccessDesc: 'Your Cargo account has been created. Continuing to two-factor verification...',
     errFullNameRequired: 'Full name is required',
     errPhoneRequired: 'Valid Rwanda phone number is required (e.g. 078... or +25078...)',
+    errEmailRequired: 'Valid email address is required',
+    confirmPassword: 'Confirm Password',
     errOrgRequired: 'Cooperative or business name is required',
     errDistrictRequired: 'Please select your district',
     errPasswordMin: 'Password must be at least 6 characters',

@@ -2,13 +2,13 @@ import React, { useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { colors, radii, shadows, typography, spacing } from '../../theme/tokens';
+import { colors, radii, typography, spacing } from '../../theme/tokens';
 import { useTranslation } from '../../i18n';
 import { SplashScreen } from '../bootstrap/SplashScreen';
 import { TopAppBar } from '../../components/navigation/TopAppBar';
 import { WelcomeScreen } from '../../features/auth/WelcomeScreen';
-import { RoleSelectionScreen } from '../../features/auth/RoleSelectionScreen';
 import { RegisterScreen } from '../../features/auth/RegisterScreen';
+import { VerificationStatusScreen } from '../../features/auth/VerificationStatusScreen';
 import { AgentInviteScreen } from '../../features/auth/AgentInviteScreen';
 import { LoginScreen } from '../../features/auth/LoginScreen';
 import { SupplierOnboardingScreen } from '../../features/auth/SupplierOnboardingScreen';
@@ -24,16 +24,16 @@ import { LotListScreen } from '../../features/supplier/LotListScreen';
 import { CreateLotWizard } from '../../features/supplier/CreateLotWizard';
 import { SupplierOrdersScreen } from '../../features/supplier/SupplierOrdersScreen';
 
-// Agent Screens
+// Agent / Inspector Screens
 import { AgentTasksScreen } from '../../features/agent/AgentTasksScreen';
 import { GradingFormScreen } from '../../features/agent/GradingFormScreen';
 import { OfflineQueueScreen } from '../../features/agent/OfflineQueueScreen';
 
 // Buyer Screens
+import { BuyerHomeScreen } from '../../features/buyer/BuyerHomeScreen';
 import { BuyerCatalogueScreen } from '../../features/buyer/BuyerCatalogueScreen';
 import { CreateRequestScreen } from '../../features/buyer/CreateRequestScreen';
 import { LotDetailScreen } from '../../features/buyer/LotDetailScreen';
-import { BuyerOffersScreen } from '../../features/buyer/BuyerOffersScreen';
 import { BuyerOrdersListScreen } from '../../features/buyer/BuyerOrdersListScreen';
 import { BuyerOrderDetailScreen } from '../../features/buyer/BuyerOrderDetailScreen';
 
@@ -41,13 +41,13 @@ import { BuyerOrderDetailScreen } from '../../features/buyer/BuyerOrderDetailScr
 import { NotificationInboxScreen } from '../../features/notifications/NotificationInboxScreen';
 import { ProfileScreen } from '../../features/profile/ProfileScreen';
 
-import { UserRole } from '../../domain/enums';
-import { User, Lot, Organization, BuyerLotProjection, Order } from '../../domain/models';
+import { UserRole, LotStatus } from '../../domain/enums';
+import { User, Lot, Organization, BuyerLotProjection, Order, WarehouseStockGroup } from '../../domain/models';
 
 type AuthFlowStep =
   | 'welcome'
-  | 'role_select'
   | 'register'
+  | 'verification'
   | 'agent_invite'
   | 'login'
   | 'onboarding_supplier'
@@ -61,7 +61,6 @@ export const RootNavigator: React.FC = () => {
 
   // Unauthenticated Entry Flow State
   const [authFlowStep, setAuthFlowStep] = useState<AuthFlowStep>('welcome');
-  const [selectedRole, setSelectedRole] = useState<UserRole.SUPPLIER | UserRole.BUYER>(UserRole.SUPPLIER);
   const [newlyRegisteredUser, setNewlyRegisteredUser] = useState<User | null>(null);
 
   // Active Tab state for each role
@@ -77,6 +76,7 @@ export const RootNavigator: React.FC = () => {
   const [showCreateRequest, setShowCreateRequest] = useState(false);
   const [selectedBuyerLot, setSelectedBuyerLot] = useState<BuyerLotProjection | null>(null);
   const [selectedBuyerOrder, setSelectedBuyerOrder] = useState<Order | null>(null);
+  const [showSearchCatalogue, setShowSearchCatalogue] = useState(false);
 
   const handleLogout = async () => {
     await authService.logout();
@@ -84,6 +84,10 @@ export const RootNavigator: React.FC = () => {
     setNewlyRegisteredUser(null);
     setAuthFlowStep('welcome');
     setActiveTab('home');
+    setShowSearchCatalogue(false);
+    setSelectedBuyerLot(null);
+    setSelectedBuyerOrder(null);
+    setShowCreateRequest(false);
   };
 
   if (bootstrapping) {
@@ -93,7 +97,11 @@ export const RootNavigator: React.FC = () => {
           if (user) {
             const org = authService.getUserOrganization(user);
             const route = resolveAuthenticatedRoute(user, org);
-            if (route.requiresOnboarding) {
+
+            if (user.contactVerified === false || user.approvalStatus === 'PENDING') {
+              setNewlyRegisteredUser(user);
+              setAuthFlowStep('verification');
+            } else if (route.requiresOnboarding) {
               setNewlyRegisteredUser(user);
               if (route.destination === 'ONBOARDING_SUPPLIER') setAuthFlowStep('onboarding_supplier');
               else if (route.destination === 'ONBOARDING_BUYER') setAuthFlowStep('onboarding_buyer');
@@ -116,39 +124,37 @@ export const RootNavigator: React.FC = () => {
 
   // Master Unauthenticated Entry Flow
   if (!currentUser) {
-    if (authFlowStep === 'role_select') {
+    if (authFlowStep === 'register') {
       return (
-        <RoleSelectionScreen
-          initialRole={selectedRole}
-          onSelectRole={role => {
-            setSelectedRole(role);
-            setAuthFlowStep('register');
+        <RegisterScreen
+          onRegisterSuccess={user => {
+            setNewlyRegisteredUser(user);
+            setAuthFlowStep('verification');
           }}
-          onNavigateBack={() => setAuthFlowStep('welcome')}
+          onBackToWelcome={() => setAuthFlowStep('welcome')}
           onNavigateToLogin={() => setAuthFlowStep('login')}
-          onNavigateToAgentInvite={() => setAuthFlowStep('agent_invite')}
         />
       );
     }
 
-    if (authFlowStep === 'register') {
+    if (authFlowStep === 'verification' && newlyRegisteredUser) {
       return (
-        <RegisterScreen
-          selectedRole={selectedRole}
-          onRegisterSuccess={user => {
-            setNewlyRegisteredUser(user);
-            if (user.role === UserRole.SUPPLIER) {
-              setAuthFlowStep('onboarding_supplier');
-            } else if (user.role === UserRole.BUYER) {
-              setAuthFlowStep('onboarding_buyer');
-            } else if (user.role === UserRole.FIELD_AGENT) {
-              setAuthFlowStep('onboarding_agent');
-            } else {
-              setCurrentUser(user);
+        <VerificationStatusScreen
+          user={newlyRegisteredUser}
+          onStatusUpdated={(updatedUser: User) => {
+            setNewlyRegisteredUser(updatedUser);
+            if (updatedUser.approvalStatus === 'APPROVED') {
+              if (updatedUser.role === UserRole.BUYER) {
+                setAuthFlowStep('onboarding_buyer');
+              } else if (updatedUser.role === UserRole.SUPPLIER) {
+                setAuthFlowStep('onboarding_supplier');
+              } else {
+                setCurrentUser(updatedUser);
+                setActiveTab('home');
+              }
             }
           }}
-          onBackToRoleSelect={() => setAuthFlowStep('role_select')}
-          onNavigateToLogin={() => setAuthFlowStep('login')}
+          onSignOut={handleLogout}
         />
       );
     }
@@ -190,7 +196,7 @@ export const RootNavigator: React.FC = () => {
           onComplete={async () => {
             const updated = await authService.completeOnboarding(newlyRegisteredUser.id);
             setCurrentUser(updated);
-            setActiveTab('catalogue');
+            setActiveTab('home');
           }}
         />
       );
@@ -205,7 +211,7 @@ export const RootNavigator: React.FC = () => {
           onComplete={async () => {
             const updated = await authService.completeOnboarding(newlyRegisteredUser.id);
             setCurrentUser(updated);
-            setActiveTab('tasks');
+            setActiveTab('home');
           }}
         />
       );
@@ -217,7 +223,11 @@ export const RootNavigator: React.FC = () => {
           onLoginSuccess={user => {
             const org = authService.getUserOrganization(user);
             const route = resolveAuthenticatedRoute(user, org);
-            if (route.requiresOnboarding) {
+
+            if (user.contactVerified === false || user.approvalStatus === 'PENDING') {
+              setNewlyRegisteredUser(user);
+              setAuthFlowStep('verification');
+            } else if (route.requiresOnboarding) {
               setNewlyRegisteredUser(user);
               if (route.destination === 'ONBOARDING_SUPPLIER') setAuthFlowStep('onboarding_supplier');
               else if (route.destination === 'ONBOARDING_BUYER') setAuthFlowStep('onboarding_buyer');
@@ -227,7 +237,7 @@ export const RootNavigator: React.FC = () => {
               if (route.initialTab) setActiveTab(route.initialTab);
             }
           }}
-          onNavigateToRegister={() => setAuthFlowStep('role_select')}
+          onNavigateToRegister={() => setAuthFlowStep('register')}
           onNavigateBack={() => setAuthFlowStep('welcome')}
         />
       );
@@ -236,7 +246,7 @@ export const RootNavigator: React.FC = () => {
     // Default: 'welcome'
     return (
       <WelcomeScreen
-        onGetStarted={() => setAuthFlowStep('role_select')}
+        onGetStarted={() => setAuthFlowStep('register')}
         onNavigateToLogin={() => setAuthFlowStep('login')}
         onNavigateToAgentInvite={() => setAuthFlowStep('agent_invite')}
       />
@@ -264,12 +274,6 @@ export const RootNavigator: React.FC = () => {
         return t.tabs.orders;
       case 'tasks':
         return t.tabs.tasks;
-      case 'queue':
-        return t.tabs.queue;
-      case 'catalogue':
-        return t.tabs.catalogue;
-      case 'offers':
-        return t.tabs.offers;
       case 'notifications':
         return t.tabs.notifications;
       case 'profile':
@@ -279,7 +283,7 @@ export const RootNavigator: React.FC = () => {
     }
   };
 
-  // 2. Supplier Navigation Shell
+  // 2. Supplier Navigation Shell: Home · Lots · Orders · Profile
   if (currentUser.role === UserRole.SUPPLIER) {
     if (showCreateLot) {
       return (
@@ -303,7 +307,6 @@ export const RootNavigator: React.FC = () => {
 
     return (
       <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right']}>
-        {/* Unified Top App Bar */}
         <TopAppBar
           title={getTabTitle()}
           user={currentUser}
@@ -342,7 +345,7 @@ export const RootNavigator: React.FC = () => {
           )}
         </View>
 
-        {/* Polished Bottom Tab Bar */}
+        {/* Supplier Bottom Tab Bar: Home · Lots · Orders · Profile */}
         <View style={styles.tabBar}>
           <TouchableOpacity
             style={[styles.tabItem, activeTab === 'home' && styles.tabItemActive]}
@@ -402,25 +405,6 @@ export const RootNavigator: React.FC = () => {
           </TouchableOpacity>
 
           <TouchableOpacity
-            style={[styles.tabItem, activeTab === 'notifications' && styles.tabItemActive]}
-            onPress={() => setActiveTab('notifications')}
-            activeOpacity={0.8}
-            accessibilityRole="tab"
-          >
-            <Ionicons
-              name={activeTab === 'notifications' ? 'notifications' : 'notifications-outline'}
-              size={20}
-              color={activeTab === 'notifications' ? colors.primary : colors.neutralLight}
-            />
-            <Text
-              style={[styles.tabLabel, activeTab === 'notifications' && styles.tabLabelActive]}
-              numberOfLines={1}
-            >
-              {t.tabs.notifications}
-            </Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
             style={[styles.tabItem, activeTab === 'profile' && styles.tabItemActive]}
             onPress={() => setActiveTab('profile')}
             activeOpacity={0.8}
@@ -443,8 +427,8 @@ export const RootNavigator: React.FC = () => {
     );
   }
 
-  // 3. Field Agent Navigation Shell
-  if (currentUser.role === UserRole.FIELD_AGENT) {
+  // 3. Field Inspector Navigation Shell: Home · Tasks · Profile
+  if (currentUser.role === UserRole.FIELD_AGENT || (currentUser.role as any) === 'FIELD_INSPECTOR') {
     if (activeTask) {
       return (
         <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right']}>
@@ -459,7 +443,7 @@ export const RootNavigator: React.FC = () => {
             agent={currentUser}
             onSuccess={() => {
               setActiveTask(null);
-              setActiveTab('tasks');
+              setActiveTab('home');
             }}
             onCancel={() => setActiveTask(null)}
           />
@@ -469,7 +453,6 @@ export const RootNavigator: React.FC = () => {
 
     return (
       <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right']}>
-        {/* Unified Top App Bar */}
         <TopAppBar
           title={getTabTitle()}
           user={currentUser}
@@ -478,12 +461,12 @@ export const RootNavigator: React.FC = () => {
         />
 
         <View style={styles.screenContainer}>
-          {activeTab === 'tasks' && (
+          {activeTab === 'home' && (
             <AgentTasksScreen
               onSelectTask={(lot, org) => setActiveTask({ lot, org })}
             />
           )}
-          {activeTab === 'queue' && (
+          {activeTab === 'tasks' && (
             <OfflineQueueScreen />
           )}
           {activeTab === 'notifications' && (
@@ -493,14 +476,33 @@ export const RootNavigator: React.FC = () => {
             <ProfileScreen
               user={currentUser}
               onLogout={handleLogout}
-              onResetComplete={() => setActiveTab('tasks')}
+              onResetComplete={() => setActiveTab('home')}
               onUserUpdated={updated => setCurrentUser(updated)}
             />
           )}
         </View>
 
-        {/* Agent Bottom Tab Bar */}
+        {/* Inspector Bottom Tab Bar: Home · Tasks/Queue · Profile */}
         <View style={styles.tabBar}>
+          <TouchableOpacity
+            style={[styles.tabItem, activeTab === 'home' && styles.tabItemActive]}
+            onPress={() => setActiveTab('home')}
+            activeOpacity={0.8}
+            accessibilityRole="tab"
+          >
+            <Ionicons
+              name={activeTab === 'home' ? 'clipboard' : 'clipboard-outline'}
+              size={20}
+              color={activeTab === 'home' ? colors.primary : colors.neutralLight}
+            />
+            <Text
+              style={[styles.tabLabel, activeTab === 'home' && styles.tabLabelActive]}
+              numberOfLines={1}
+            >
+              Tasks
+            </Text>
+          </TouchableOpacity>
+
           <TouchableOpacity
             style={[styles.tabItem, activeTab === 'tasks' && styles.tabItemActive]}
             onPress={() => setActiveTab('tasks')}
@@ -508,7 +510,7 @@ export const RootNavigator: React.FC = () => {
             accessibilityRole="tab"
           >
             <Ionicons
-              name={activeTab === 'tasks' ? 'clipboard' : 'clipboard-outline'}
+              name={activeTab === 'tasks' ? 'cloud-done' : 'cloud-offline-outline'}
               size={20}
               color={activeTab === 'tasks' ? colors.primary : colors.neutralLight}
             />
@@ -516,45 +518,7 @@ export const RootNavigator: React.FC = () => {
               style={[styles.tabLabel, activeTab === 'tasks' && styles.tabLabelActive]}
               numberOfLines={1}
             >
-              {t.tabs.tasks}
-            </Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[styles.tabItem, activeTab === 'queue' && styles.tabItemActive]}
-            onPress={() => setActiveTab('queue')}
-            activeOpacity={0.8}
-            accessibilityRole="tab"
-          >
-            <Ionicons
-              name={activeTab === 'queue' ? 'cloud-done' : 'cloud-offline-outline'}
-              size={20}
-              color={activeTab === 'queue' ? colors.primary : colors.neutralLight}
-            />
-            <Text
-              style={[styles.tabLabel, activeTab === 'queue' && styles.tabLabelActive]}
-              numberOfLines={1}
-            >
-              {t.tabs.queue}
-            </Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[styles.tabItem, activeTab === 'notifications' && styles.tabItemActive]}
-            onPress={() => setActiveTab('notifications')}
-            activeOpacity={0.8}
-            accessibilityRole="tab"
-          >
-            <Ionicons
-              name={activeTab === 'notifications' ? 'notifications' : 'notifications-outline'}
-              size={20}
-              color={activeTab === 'notifications' ? colors.primary : colors.neutralLight}
-            />
-            <Text
-              style={[styles.tabLabel, activeTab === 'notifications' && styles.tabLabelActive]}
-              numberOfLines={1}
-            >
-              {t.tabs.notifications}
+              Sync Queue
             </Text>
           </TouchableOpacity>
 
@@ -581,13 +545,13 @@ export const RootNavigator: React.FC = () => {
     );
   }
 
-  // 4. Buyer Extension Navigation Shell
+  // 4. Buyer Navigation Shell: Home · Orders · Profile
   if (currentUser.role === UserRole.BUYER) {
     if (showCreateRequest) {
       return (
         <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right']}>
           <TopAppBar
-            title={t.buyer.postRequest}
+            title="Request Stock"
             showBack
             onBack={() => setShowCreateRequest(false)}
           />
@@ -595,6 +559,25 @@ export const RootNavigator: React.FC = () => {
             user={currentUser}
             onSuccess={() => setShowCreateRequest(false)}
             onCancel={() => setShowCreateRequest(false)}
+          />
+        </SafeAreaView>
+      );
+    }
+
+    if (showSearchCatalogue) {
+      return (
+        <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right']}>
+          <TopAppBar
+            title="Search & Discover"
+            showBack
+            onBack={() => setShowSearchCatalogue(false)}
+          />
+          <BuyerCatalogueScreen
+            onNavigateToCreateRequest={() => {
+              setShowSearchCatalogue(false);
+              setShowCreateRequest(true);
+            }}
+            onSelectLot={lot => setSelectedBuyerLot(lot)}
           />
         </SafeAreaView>
       );
@@ -641,7 +624,6 @@ export const RootNavigator: React.FC = () => {
 
     return (
       <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right']}>
-        {/* Unified Top App Bar */}
         <TopAppBar
           title={getTabTitle()}
           user={currentUser}
@@ -650,23 +632,38 @@ export const RootNavigator: React.FC = () => {
         />
 
         <View style={styles.screenContainer}>
-          {activeTab === 'catalogue' && (
-            <BuyerCatalogueScreen
-              onNavigateToCreateRequest={() => setShowCreateRequest(true)}
-              onSelectLot={lot => setSelectedBuyerLot(lot)}
-            />
-          )}
-          {activeTab === 'offers' && (
-            <BuyerOffersScreen
+          {activeTab === 'home' && (
+            <BuyerHomeScreen
               user={currentUser}
-              onOfferAccepted={() => setActiveTab('orders')}
+              onNavigateToSearch={() => setShowSearchCatalogue(true)}
+              onSelectStockGroup={group => {
+                const projected: BuyerLotProjection = {
+                  id: group.id,
+                  lotCode: `STOCK-${group.cropName.toUpperCase().slice(0, 3)}-${group.grade}`,
+                  cropName: group.cropName,
+                  cropType: group.cropType,
+                  variety: group.variety,
+                  availableQuantityKg: group.availableToOrderKg,
+                  pricePerKgRwf: group.pricePerKgRwf,
+                  grade: group.grade,
+                  availabilityDate: group.availabilityDate,
+                  district: group.hubLocation,
+                  photos: group.photos,
+                  status: LotStatus.VERIFIED,
+                  verifiedAt: new Date().toISOString(),
+                };
+                setSelectedBuyerLot(projected);
+              }}
+              onNavigateToRequestStock={() => setShowCreateRequest(true)}
+              onNavigateToOrders={() => setActiveTab('orders')}
+              onSelectOrder={ord => setSelectedBuyerOrder(ord)}
             />
           )}
           {activeTab === 'orders' && (
             <BuyerOrdersListScreen
               user={currentUser}
               onSelectOrder={ord => setSelectedBuyerOrder(ord)}
-              onNavigateToCatalogue={() => setActiveTab('catalogue')}
+              onNavigateToCatalogue={() => setShowSearchCatalogue(true)}
             />
           )}
           {activeTab === 'notifications' && (
@@ -676,49 +673,30 @@ export const RootNavigator: React.FC = () => {
             <ProfileScreen
               user={currentUser}
               onLogout={handleLogout}
-              onResetComplete={() => setActiveTab('catalogue')}
+              onResetComplete={() => setActiveTab('home')}
               onUserUpdated={updated => setCurrentUser(updated)}
             />
           )}
         </View>
 
-        {/* Buyer Bottom Tab Bar */}
+        {/* Buyer Bottom Tab Bar: Home · Orders · Profile */}
         <View style={styles.tabBar}>
           <TouchableOpacity
-            style={[styles.tabItem, activeTab === 'catalogue' && styles.tabItemActive]}
-            onPress={() => setActiveTab('catalogue')}
+            style={[styles.tabItem, activeTab === 'home' && styles.tabItemActive]}
+            onPress={() => setActiveTab('home')}
             activeOpacity={0.8}
             accessibilityRole="tab"
           >
             <Ionicons
-              name={activeTab === 'catalogue' ? 'search' : 'search-outline'}
+              name={activeTab === 'home' ? 'home' : 'home-outline'}
               size={20}
-              color={activeTab === 'catalogue' ? colors.primary : colors.neutralLight}
+              color={activeTab === 'home' ? colors.primary : colors.neutralLight}
             />
             <Text
-              style={[styles.tabLabel, activeTab === 'catalogue' && styles.tabLabelActive]}
+              style={[styles.tabLabel, activeTab === 'home' && styles.tabLabelActive]}
               numberOfLines={1}
             >
-              {t.tabs.catalogue}
-            </Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[styles.tabItem, activeTab === 'offers' && styles.tabItemActive]}
-            onPress={() => setActiveTab('offers')}
-            activeOpacity={0.8}
-            accessibilityRole="tab"
-          >
-            <Ionicons
-              name={activeTab === 'offers' ? 'git-pull-request' : 'git-pull-request-outline'}
-              size={20}
-              color={activeTab === 'offers' ? colors.primary : colors.neutralLight}
-            />
-            <Text
-              style={[styles.tabLabel, activeTab === 'offers' && styles.tabLabelActive]}
-              numberOfLines={1}
-            >
-              {t.tabs.offers}
+              {t.tabs.home}
             </Text>
           </TouchableOpacity>
 
@@ -738,25 +716,6 @@ export const RootNavigator: React.FC = () => {
               numberOfLines={1}
             >
               {t.tabs.orders}
-            </Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[styles.tabItem, activeTab === 'notifications' && styles.tabItemActive]}
-            onPress={() => setActiveTab('notifications')}
-            activeOpacity={0.8}
-            accessibilityRole="tab"
-          >
-            <Ionicons
-              name={activeTab === 'notifications' ? 'notifications' : 'notifications-outline'}
-              size={20}
-              color={activeTab === 'notifications' ? colors.primary : colors.neutralLight}
-            />
-            <Text
-              style={[styles.tabLabel, activeTab === 'notifications' && styles.tabLabelActive]}
-              numberOfLines={1}
-            >
-              {t.tabs.notifications}
             </Text>
           </TouchableOpacity>
 
@@ -798,34 +757,31 @@ const styles = StyleSheet.create({
   tabBar: {
     height: 64,
     backgroundColor: '#FFFFFF',
-    borderTopWidth: 1,
-    borderTopColor: colors.border,
     flexDirection: 'row',
-    justifyContent: 'space-around',
     alignItems: 'center',
-    paddingHorizontal: spacing.xs,
+    justifyContent: 'space-around',
+    borderTopWidth: 1,
+    borderTopColor: colors.borderLight,
     paddingBottom: 4,
-    ...shadows.subtle,
   },
   tabItem: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: 6,
-    borderRadius: radii.sm,
   },
   tabItemActive: {
-    backgroundColor: colors.surfaceHighlighted,
+    // subtle active indicator
   },
   tabLabel: {
     ...typography.caption,
-    fontSize: 10,
-    color: colors.neutralGray,
-    fontWeight: '500',
+    fontSize: 11,
+    color: colors.neutralLight,
     marginTop: 2,
+    fontWeight: '500',
   },
   tabLabelActive: {
     color: colors.primary,
-    fontWeight: '700',
+    fontWeight: 'bold',
   },
 });

@@ -6,6 +6,9 @@ import {
   ScrollView,
   TouchableOpacity,
   Alert,
+  Modal,
+  TextInput,
+  ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, radii, shadows, typography, spacing } from '../../theme/tokens';
@@ -16,6 +19,8 @@ import { StatusBadge } from '../../components/ui/StatusBadge';
 import { CropBadge } from '../../components/ui/CropBadge';
 import { SafeImage } from '../../components/ui/SafeImage';
 import { formatRwf, formatQuantity } from '../../domain/calculations/lotCalculations';
+import { calculateBuyerFee } from '../../domain/calculations/feeCalculator';
+import { offerService } from '../../services/mock/mockServices';
 import { BuyerLotProjection, User } from '../../domain/models';
 
 interface LotDetailScreenProps {
@@ -34,9 +39,52 @@ export const LotDetailScreen: React.FC<LotDetailScreenProps> = ({
   const { t } = useTranslation();
   const [activePhotoIndex, setActivePhotoIndex] = useState(0);
   const [inquired, setInquired] = useState(false);
+  const [showOrderModal, setShowOrderModal] = useState(false);
+  const [orderQty, setOrderQty] = useState(String(Math.min(1000, lot.availableQuantityKg)));
+  const [deliveryAddress, setDeliveryAddress] = useState('Central Receiving Facility, Kigali');
+  const [orderLoading, setOrderLoading] = useState(false);
+  const [orderError, setOrderError] = useState<string | null>(null);
 
   const photos = lot.photos && lot.photos.length > 0 ? lot.photos : [];
   const currentPhoto = photos[activePhotoIndex] || photos[0];
+
+  const parsedQty = Math.max(0, Number(orderQty) || 0);
+  const subtotalRwf = Math.round(parsedQty * lot.pricePerKgRwf);
+  const feeCalc = calculateBuyerFee(subtotalRwf);
+  const buyerFeeRwf = feeCalc.buyerFeeRwf;
+  const totalPayableRwf = feeCalc.totalBuyerPayableRwf;
+
+  const handleConfirmOrder = async () => {
+    if (parsedQty <= 0) {
+      setOrderError('Quantity must be greater than 0 kg.');
+      return;
+    }
+    if (parsedQty > lot.availableQuantityKg) {
+      setOrderError(`Quantity cannot exceed available stock (${lot.availableQuantityKg.toLocaleString()} kg).`);
+      return;
+    }
+    setOrderLoading(true);
+    setOrderError(null);
+    try {
+      await offerService.createOffer(user, {
+        lotId: lot.id,
+        quantityKg: parsedQty,
+        deliveryDistrict: lot.district || 'Gasabo (Kigali)',
+        deliveryDate: lot.availabilityDate || new Date(Date.now() + 86400000 * 3).toISOString().split('T')[0],
+        notes: `Direct stock purchase from warehouse catalogue. Delivery to ${deliveryAddress}`,
+      });
+      setShowOrderModal(false);
+      Alert.alert(
+        'Order Submitted',
+        `Your purchase order for ${parsedQty.toLocaleString()} kg of ${lot.cropName} (${formatRwf(totalPayableRwf)}) has been created. Awaiting payment authorization.`,
+        [{ text: 'OK', onPress: onBack }]
+      );
+    } catch (err: any) {
+      setOrderError(err.message || 'Failed to place order.');
+    } finally {
+      setOrderLoading(false);
+    }
+  };
 
   const handleInquire = () => {
     setInquired(true);
@@ -247,29 +295,130 @@ export const LotDetailScreen: React.FC<LotDetailScreenProps> = ({
           </View>
         </View>
 
-        {/* 6. Action Buttons */}
+        {/* 6. Action Buttons - Place Order & Request Stock */}
         <View style={styles.actionButtonsWrap}>
-          <Button
-            title={t.buyer.includeInRequest}
-            onPress={onRequestMatch}
-            icon={<Ionicons name="cart-outline" size={18} color="#FFFFFF" />}
-            size="large"
-            fullWidth
-            style={styles.primaryActionBtn}
-          />
+          <TouchableOpacity
+            style={styles.orderNowBtn}
+            onPress={() => setShowOrderModal(true)}
+            activeOpacity={0.85}
+          >
+            <Ionicons name="cart" size={18} color="#FFFFFF" />
+            <Text style={styles.orderNowBtnText}>Place order from available stock</Text>
+          </TouchableOpacity>
 
-          <Button
-            title={inquired ? t.buyer.inquireSuccess.split('.')[0] : t.buyer.inquireAction}
-            onPress={handleInquire}
-            variant="outline"
-            size="medium"
-            icon={<Ionicons name="help-buoy-outline" size={18} color={colors.primary} />}
-            fullWidth
-            disabled={inquired}
-            style={styles.secondaryActionBtn}
-          />
+          <TouchableOpacity
+            style={styles.requestStockBtn}
+            onPress={onRequestMatch}
+            activeOpacity={0.85}
+          >
+            <Ionicons name="git-pull-request-outline" size={18} color="#174A35" />
+            <Text style={styles.requestStockBtnText}>Request stock</Text>
+          </TouchableOpacity>
         </View>
       </Card>
+
+      {/* Place Order Modal */}
+      <Modal visible={showOrderModal} animationType="slide" transparent>
+        <View style={styles.modalOverlay}>
+          <View style={styles.orderModalCard}>
+            <View style={styles.modalHeader}>
+              <View>
+                <Text style={styles.modalTitle}>Place Stock Order</Text>
+                <Text style={styles.modalSubtitle}>
+                  {lot.cropName} ({lot.variety || 'Standard Bulk'}) · {lot.grade}
+                </Text>
+              </View>
+              <TouchableOpacity onPress={() => setShowOrderModal(false)}>
+                <Ionicons name="close" size={24} color="#202822" />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView style={{ marginVertical: 10 }}>
+              <View style={styles.orderModalContent}>
+                {orderError && (
+                  <View style={styles.orderErrorBox}>
+                    <Ionicons name="alert-circle" size={16} color="#B42318" />
+                    <Text style={styles.orderErrorText}>{orderError}</Text>
+                  </View>
+                )}
+
+                <View style={styles.stockAvailabilityBadge}>
+                  <Ionicons name="cube-outline" size={16} color="#174A35" />
+                  <Text style={styles.stockAvailabilityText}>
+                    Available in warehouse: {lot.availableQuantityKg.toLocaleString()} kg
+                  </Text>
+                </View>
+
+                {/* Desired Quantity Input */}
+                <View style={styles.inputGroup}>
+                  <Text style={styles.inputLabel}>Desired Quantity (kg):</Text>
+                  <TextInput
+                    style={styles.modalInput}
+                    value={orderQty}
+                    onChangeText={setOrderQty}
+                    keyboardType="numeric"
+                    placeholder="e.g. 500"
+                    placeholderTextColor="#94A3B8"
+                  />
+                  <Text style={styles.inputHelper}>
+                    Maximum available: {lot.availableQuantityKg.toLocaleString()} kg
+                  </Text>
+                </View>
+
+                {/* Delivery Location Input */}
+                <View style={styles.inputGroup}>
+                  <Text style={styles.inputLabel}>Delivery District & Address:</Text>
+                  <TextInput
+                    style={styles.modalInput}
+                    value={deliveryAddress}
+                    onChangeText={setDeliveryAddress}
+                    placeholder="e.g. Nyarugenge, Kigali Central Storehouse"
+                    placeholderTextColor="#94A3B8"
+                  />
+                </View>
+
+                {/* Financial Breakdown (BR-04 Invariant) */}
+                <View style={styles.feeBreakdownBox}>
+                  <View style={styles.feeRow}>
+                    <Text style={styles.feeLabel}>Subtotal ({parsedQty.toLocaleString()} kg @ {lot.pricePerKgRwf} RWF):</Text>
+                    <Text style={styles.feeValue}>{formatRwf(subtotalRwf)}</Text>
+                  </View>
+                  <View style={styles.feeRow}>
+                    <Text style={styles.feeLabel}>Buyer Platform Fee (5%):</Text>
+                    <Text style={styles.feeValue}>{formatRwf(buyerFeeRwf)}</Text>
+                  </View>
+                  <View style={styles.feeDivider} />
+                  <View style={styles.feeRow}>
+                    <Text style={styles.totalPayableLabel}>Total Escrow Payable:</Text>
+                    <Text style={styles.totalPayableValue}>{formatRwf(totalPayableRwf)}</Text>
+                  </View>
+                  <Text style={styles.escrowNotice}>
+                    Protected by Cargo Escrow: payment is released only upon confirmed delivery receipt (BR-03, BR-04).
+                  </Text>
+                </View>
+              </View>
+            </ScrollView>
+
+            <TouchableOpacity
+              style={[styles.confirmOrderBtn, orderLoading && { opacity: 0.6 }]}
+              onPress={handleConfirmOrder}
+              disabled={orderLoading}
+              activeOpacity={0.85}
+            >
+              {orderLoading ? (
+                <ActivityIndicator size="small" color="#FFFFFF" />
+              ) : (
+                <>
+                  <Ionicons name="shield-checkmark" size={18} color="#FFFFFF" />
+                  <Text style={styles.confirmOrderBtnText}>
+                    Confirm Order ({formatRwf(totalPayableRwf)})
+                  </Text>
+                </>
+              )}
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </ScrollView>
   );
 };
@@ -588,6 +737,179 @@ const styles = StyleSheet.create({
   },
   actionButtonsWrap: {
     gap: spacing.sm,
+  },
+  orderNowBtn: {
+    backgroundColor: '#174A35',
+    borderRadius: 12,
+    paddingVertical: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  orderNowBtnText: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#FFFFFF',
+  },
+  requestStockBtn: {
+    backgroundColor: '#EAF2EC',
+    borderWidth: 1,
+    borderColor: '#DCE4DD',
+    borderRadius: 12,
+    paddingVertical: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  requestStockBtnText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#174A35',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'flex-end',
+  },
+  orderModalCard: {
+    backgroundColor: '#FFFFFF',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    padding: 20,
+    maxHeight: '85%',
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingBottom: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#DCE4DD',
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: '#202822',
+  },
+  modalSubtitle: {
+    fontSize: 12,
+    color: '#66716A',
+    marginTop: 2,
+  },
+  orderModalContent: {
+    gap: 14,
+    paddingVertical: 6,
+  },
+  orderErrorBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: '#FEE2E2',
+    borderColor: '#FCA5A5',
+    borderWidth: 1,
+    borderRadius: 8,
+    padding: 10,
+  },
+  orderErrorText: {
+    fontSize: 12,
+    color: '#B42318',
+    flex: 1,
+  },
+  stockAvailabilityBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#EAF2EC',
+    padding: 10,
+    borderRadius: 8,
+  },
+  stockAvailabilityText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#174A35',
+  },
+  inputGroup: {
+    gap: 6,
+  },
+  inputLabel: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#202822',
+  },
+  modalInput: {
+    backgroundColor: '#F7F8F5',
+    borderWidth: 1,
+    borderColor: '#DCE4DD',
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    fontSize: 14,
+    color: '#202822',
+  },
+  inputHelper: {
+    fontSize: 11,
+    color: '#66716A',
+  },
+  feeBreakdownBox: {
+    backgroundColor: '#F7F8F5',
+    borderRadius: 12,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: '#DCE4DD',
+    gap: 8,
+  },
+  feeRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  feeLabel: {
+    fontSize: 12,
+    color: '#66716A',
+    flex: 1,
+  },
+  feeValue: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#202822',
+  },
+  feeDivider: {
+    height: 1,
+    backgroundColor: '#DCE4DD',
+    marginVertical: 4,
+  },
+  totalPayableLabel: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#202822',
+  },
+  totalPayableValue: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: '#174A35',
+  },
+  escrowNotice: {
+    fontSize: 11,
+    color: '#66716A',
+    lineHeight: 15,
+    marginTop: 4,
+  },
+  confirmOrderBtn: {
+    backgroundColor: '#174A35',
+    borderRadius: 12,
+    paddingVertical: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    marginTop: 10,
+  },
+  confirmOrderBtnText: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#FFFFFF',
   },
   primaryActionBtn: {},
   secondaryActionBtn: {},

@@ -3,26 +3,22 @@ import {
   View,
   Text,
   StyleSheet,
-  ScrollView,
   TouchableOpacity,
-  Platform,
+  Image,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { colors, radii, shadows, typography, spacing } from '../../theme/tokens';
 import { useTranslation, Language } from '../../i18n';
-import { Button } from '../../components/ui/Button';
 
 interface WelcomeScreenProps {
   onGetStarted: () => void;
   onNavigateToLogin: () => void;
-  onNavigateToAgentInvite: () => void;
+  onNavigateToAgentInvite?: () => void;
 }
 
 export const WelcomeScreen: React.FC<WelcomeScreenProps> = ({
   onGetStarted,
   onNavigateToLogin,
-  onNavigateToAgentInvite,
 }) => {
   const { t, language, setLanguage } = useTranslation();
 
@@ -32,346 +28,263 @@ export const WelcomeScreen: React.FC<WelcomeScreenProps> = ({
   };
 
   return (
-    <SafeAreaView style={styles.safeArea} edges={['top', 'bottom', 'left', 'right']}>
-      <ScrollView
-        contentContainerStyle={styles.scrollContent}
-        showsVerticalScrollIndicator={false}
-      >
-        <View style={styles.contentWrapper}>
-          {/* Top Bar with Language Pill */}
-          <View style={styles.topBar}>
-            <View style={styles.brandPill}>
-              <View style={styles.onlineDot} />
-              <Text style={styles.brandPillText}>Rwanda · V1 Live</Text>
-            </View>
+    <SafeAreaView style={styles.container} edges={['top', 'bottom', 'left', 'right']}>
+      {/* Top Header with Language Pill */}
+      <View style={styles.topBar}>
+        <View style={styles.badge}>
+          <View style={styles.dot} />
+          <Text style={styles.badgeText}>Rwanda · Cargo V1</Text>
+        </View>
 
-            <TouchableOpacity
-              style={styles.langPill}
-              onPress={toggleLanguage}
-              activeOpacity={0.8}
-              accessibilityRole="button"
-              accessibilityLabel="Toggle Language"
-            >
-              <Ionicons name="globe-outline" size={15} color="#FFFFFF" />
-              <Text style={styles.langPillText}>
-                {language === 'rw' ? 'English' : 'Ikinyarwanda'}
-              </Text>
-            </TouchableOpacity>
-          </View>
+        <TouchableOpacity
+          style={styles.langPill}
+          onPress={toggleLanguage}
+          activeOpacity={0.8}
+          accessibilityRole="button"
+          accessibilityLabel="Toggle Language"
+        >
+          <Ionicons name="globe-outline" size={14} color="#DCE4DD" />
+          <Text style={styles.langText}>
+            {language === 'rw' ? 'English' : 'Kinyarwanda'}
+          </Text>
+        </TouchableOpacity>
+      </View>
 
-          {/* Hero Branding */}
-          <View style={styles.heroSection}>
-            <View style={styles.logoBadge}>
-              <Ionicons name="leaf" size={32} color="#FFFFFF" />
-            </View>
-            <Text style={styles.brandName}>{t.common.appName}</Text>
-            <Text style={styles.brandTagline}>{t.common.tagline}</Text>
-            <Text style={styles.heroHeadline}>{t.auth.welcomeTitle}</Text>
-            <Text style={styles.heroSubhead}>{t.auth.welcomeSubtitle}</Text>
-          </View>
-
-          {/* Value Proposition Cards */}
-          <View style={styles.featuresContainer}>
-            <View style={styles.featureCard}>
-              <View style={[styles.featureIconWrap, { backgroundColor: '#DCFCE7' }]}>
-                <Ionicons name="shield-checkmark" size={20} color={colors.primary} />
-              </View>
-              <View style={styles.featureTextWrap}>
-                <Text style={styles.featureTitle}>
-                  {language === 'rw' ? 'Umusaruro Wemejwe (BR-01 & BR-02)' : 'Verified Lots & Grades'}
-                </Text>
-                <Text style={styles.featureDesc}>
-                  {language === 'rw'
-                    ? 'Igenzura ry\'ubuhehere n\'inenge rikorwa n\'abagenzuzi babifitiye ububasha mbere yo kugaragara ku isoko.'
-                    : 'Physical inspection for moisture and quality defects by certified agronomists before listing.'}
-                </Text>
-              </View>
-            </View>
-
-            <View style={styles.featureCard}>
-              <View style={[styles.featureIconWrap, { backgroundColor: '#DBEAFE' }]}>
-                <Ionicons name="lock-closed" size={20} color={colors.infoDark} />
-              </View>
-              <View style={styles.featureTextWrap}>
-                <Text style={styles.featureTitle}>
-                  {language === 'rw' ? 'Umutekano wa Escrow (BR-03)' : 'Escrow Trade Settlement'}
-                </Text>
-                <Text style={styles.featureDesc}>
-                  {language === 'rw'
-                    ? 'Amafaranga acungwa mu buryo bwizewe akarekurwa ari uko umusaruro wagemuwe kandi wemejwe.'
-                    : 'Buyer payments secured in escrow; supplier payouts released upon verified physical delivery receipts.'}
-                </Text>
-              </View>
-            </View>
-
-            <View style={styles.featureCard}>
-              <View style={[styles.featureIconWrap, { backgroundColor: '#FEF3C7' }]}>
-                <Ionicons name="people" size={20} color={colors.warningDark} />
-              </View>
-              <View style={styles.featureTextWrap}>
-                <Text style={styles.featureTitle}>
-                  {language === 'rw' ? 'Guhuza Koperative n\'Abaguzi' : 'Direct Cooperative Trading'}
-                </Text>
-                <Text style={styles.featureDesc}>
-                  {language === 'rw'
-                    ? 'Ihuze n\'ibigo bikomeye bigura umusaruro w\'ibigori n\'ibishyimbo mu buryo buzwi kandi bweruye.'
-                    : 'Transparent commodity sourcing directly between farmer cooperatives and commercial buyers.'}
-                </Text>
-              </View>
-            </View>
-          </View>
-
-          {/* Action Buttons Section */}
-          <View style={styles.actionSection}>
-            <Button
-              title={t.auth.getStarted}
-              onPress={onGetStarted}
-              size="large"
-              fullWidth
-              style={styles.primaryBtn}
+      {/* Main Content Area */}
+      <View style={styles.content}>
+        <View style={styles.brandHero}>
+          <View style={styles.logoWrap}>
+            <Image
+              source={require('../../../assets/splash-icon.png')}
+              style={styles.logoImage}
+              resizeMode="cover"
             />
+          </View>
+          <Text style={styles.brandTitle}>CARGO</Text>
+          <Text style={styles.tagline}>
+            {language === 'rw'
+              ? 'Isoko ry\'ubuhinzi n\'ububiko bwizewe'
+              : 'Managed Agricultural Trading & Warehouse Platform'}
+          </Text>
+        </View>
 
-            <View style={styles.signInRow}>
-              <Text style={styles.signInPrompt}>{t.auth.alreadyHaveAccount} </Text>
-              <TouchableOpacity
-                onPress={onNavigateToLogin}
-                activeOpacity={0.7}
-                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                accessibilityRole="button"
-                accessibilityLabel={t.auth.signInLink}
-              >
-                <Text style={styles.signInLinkText}>{t.auth.signInLink}</Text>
-              </TouchableOpacity>
-            </View>
-
-            {/* Field Agent Authorized Access Path (Flow D) */}
-            <View style={styles.agentInviteDivider}>
-              <View style={styles.dividerLine} />
-              <Text style={styles.dividerLabel}>
-                {language === 'rw' ? 'CYANGWA' : 'OR'}
-              </Text>
-              <View style={styles.dividerLine} />
-            </View>
-
-            <TouchableOpacity
-              style={styles.agentInviteBtn}
-              onPress={onNavigateToAgentInvite}
-              activeOpacity={0.8}
-              accessibilityRole="button"
-              accessibilityLabel={t.auth.fieldAgentInviteLink}
-            >
-              <Ionicons name="key-outline" size={16} color="#DCFCE7" />
-              <Text style={styles.agentInviteText}>
-                {t.auth.fieldAgentInvitePrompt}{' '}
-                <Text style={styles.agentInviteHighlight}>{t.auth.fieldAgentInviteLink}</Text>
-              </Text>
-            </TouchableOpacity>
+        <View style={styles.summaryCard}>
+          <View style={styles.bulletItem}>
+            <Ionicons name="checkmark-circle" size={18} color="#2F6B4F" />
+            <Text style={styles.bulletText}>
+              {language === 'rw'
+                ? 'Umusaruro wemejwe mu bubiko bukuru'
+                : 'Aggregated stock from approved cooperatives'}
+            </Text>
+          </View>
+          <View style={styles.bulletItem}>
+            <Ionicons name="shield-checkmark" size={18} color="#2F6B4F" />
+            <Text style={styles.bulletText}>
+              {language === 'rw'
+                ? 'Igenzura ry\'ubuziranenge n\'amabwiriza'
+                : 'Rigorous field inspection and grade verification'}
+            </Text>
+          </View>
+          <View style={styles.bulletItem}>
+            <Ionicons name="lock-closed" size={18} color="#2F6B4F" />
+            <Text style={styles.bulletText}>
+              {language === 'rw'
+                ? 'Ubucuruzi n\'ubwishyu bwizewe'
+                : 'Escrow-protected settlement and logistics'}
+            </Text>
           </View>
         </View>
-      </ScrollView>
+      </View>
+
+      {/* Primary Actions */}
+      <View style={styles.footer}>
+        <TouchableOpacity
+          style={styles.primaryButton}
+          onPress={onGetStarted}
+          activeOpacity={0.85}
+          accessibilityRole="button"
+          accessibilityLabel={t.auth.getStarted}
+        >
+          <Text style={styles.primaryButtonText}>{t.auth.getStarted}</Text>
+          <Ionicons name="arrow-forward" size={18} color="#FFFFFF" />
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={styles.secondaryButton}
+          onPress={onNavigateToLogin}
+          activeOpacity={0.85}
+          accessibilityRole="button"
+          accessibilityLabel={t.auth.signInLink}
+        >
+          <Text style={styles.secondaryButtonText}>{t.auth.signInLink}</Text>
+        </TouchableOpacity>
+
+        <Text style={styles.disclaimerText}>
+          {language === 'rw'
+            ? 'Kwinjira bisaba konti yemewe na Cargo Operations.'
+            : 'Access is governed by Cargo approval and role authorization.'}
+        </Text>
+      </View>
     </SafeAreaView>
   );
 };
 
 const styles = StyleSheet.create({
-  safeArea: {
+  container: {
     flex: 1,
-    backgroundColor: colors.primaryDark,
-  },
-  scrollContent: {
-    flexGrow: 1,
-    paddingHorizontal: spacing.lg,
-    paddingTop: Platform.OS === 'android' ? spacing.md : spacing.sm,
-    paddingBottom: spacing.xxl,
-    alignItems: 'center',
-  },
-  contentWrapper: {
-    width: '100%',
-    maxWidth: 440,
+    backgroundColor: '#103B2B', // Dark forest green
+    justifyContent: 'space-between',
+    paddingHorizontal: 24,
+    paddingTop: 16,
+    paddingBottom: 24,
   },
   topBar: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: spacing.lg,
   },
-  brandPill: {
+  badge: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    backgroundColor: 'rgba(255, 255, 255, 0.12)',
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
     paddingVertical: 5,
     paddingHorizontal: 10,
-    borderRadius: radii.full,
+    borderRadius: 20,
   },
-  onlineDot: {
-    width: 7,
-    height: 7,
-    borderRadius: 3.5,
-    backgroundColor: '#06EFAC',
+  dot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#2F6B4F',
   },
-  brandPillText: {
-    ...typography.caption,
+  badgeText: {
     fontSize: 11,
-    color: '#DCFCE7',
     fontWeight: '600',
+    color: '#DCE4DD',
   },
   langPill: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    backgroundColor: 'rgba(255, 255, 255, 0.18)',
+    backgroundColor: 'rgba(255, 255, 255, 0.12)',
     paddingVertical: 6,
     paddingHorizontal: 12,
-    borderRadius: radii.full,
+    borderRadius: 20,
   },
-  langPillText: {
-    ...typography.caption,
+  langText: {
     fontSize: 12,
-    fontWeight: '700',
-    color: '#FFFFFF',
-  },
-  heroSection: {
-    alignItems: 'center',
-    marginBottom: spacing.xl,
-  },
-  logoBadge: {
-    width: 68,
-    height: 68,
-    borderRadius: 34,
-    backgroundColor: colors.primary,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: spacing.sm,
-    borderWidth: 2,
-    borderColor: '#06EFAC',
-    ...shadows.lg,
-  },
-  brandName: {
-    ...typography.h1,
-    fontSize: 34,
-    color: '#FFFFFF',
-    fontWeight: '800',
-    letterSpacing: -0.5,
-  },
-  brandTagline: {
-    ...typography.caption,
-    fontSize: 13,
-    color: '#DCFCE7',
     fontWeight: '600',
-    marginTop: 2,
-    letterSpacing: 0.5,
+    color: '#DCE4DD',
   },
-  heroHeadline: {
-    ...typography.h2,
-    fontSize: 21,
-    color: '#FFFFFF',
-    textAlign: 'center',
-    marginTop: spacing.md,
-    lineHeight: 28,
-  },
-  heroSubhead: {
-    ...typography.caption,
-    fontSize: 13,
-    color: '#E2E8F0',
-    textAlign: 'center',
-    marginTop: spacing.xs,
-    lineHeight: 18,
-    maxWidth: 360,
-  },
-  featuresContainer: {
-    gap: spacing.sm + 2,
-    marginBottom: spacing.xl,
-  },
-  featureCard: {
-    flexDirection: 'row',
+  content: {
+    flex: 1,
+    justifyContent: 'center',
     alignItems: 'center',
+    marginVertical: 20,
+  },
+  brandHero: {
+    alignItems: 'center',
+    marginBottom: 28,
+  },
+  logoWrap: {
+    width: 80,
+    height: 80,
+    borderRadius: 20,
     backgroundColor: '#FFFFFF',
-    borderRadius: radii.lg,
-    padding: spacing.md,
-    gap: spacing.md,
-    ...shadows.sm,
-  },
-  featureIconWrap: {
-    width: 42,
-    height: 42,
-    borderRadius: radii.md,
+    overflow: 'hidden',
     alignItems: 'center',
     justifyContent: 'center',
+    marginBottom: 16,
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 8,
+    elevation: 6,
+    borderWidth: 1,
+    borderColor: '#2F6B4F',
   },
-  featureTextWrap: {
-    flex: 1,
-  },
-  featureTitle: {
-    ...typography.bodyMedium,
-    fontSize: 13,
-    fontWeight: '700',
-    color: colors.neutralHeadings,
-  },
-  featureDesc: {
-    ...typography.caption,
-    fontSize: 11,
-    color: colors.neutralGray,
-    marginTop: 2,
-    lineHeight: 15,
-  },
-  actionSection: {
+  logoImage: {
     width: '100%',
-    alignItems: 'center',
+    height: '100%',
   },
-  primaryBtn: {
-    marginBottom: spacing.md,
-  },
-  signInRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: spacing.md,
-  },
-  signInPrompt: {
-    ...typography.caption,
-    fontSize: 13,
-    color: '#E2E8F0',
-  },
-  signInLinkText: {
-    ...typography.caption,
-    fontSize: 13,
+  brandTitle: {
+    fontSize: 32,
     fontWeight: '800',
-    color: '#06EFAC',
+    color: '#F7F8F5',
+    letterSpacing: 2,
   },
-  agentInviteDivider: {
-    flexDirection: 'row',
-    alignItems: 'center',
+  tagline: {
+    fontSize: 14,
+    color: '#DCE4DD',
+    textAlign: 'center',
+    marginTop: 8,
+    lineHeight: 20,
+    maxWidth: 300,
+  },
+  summaryCard: {
     width: '100%',
-    marginVertical: spacing.xs,
-    gap: spacing.sm,
+    backgroundColor: 'rgba(23, 74, 53, 0.65)',
+    borderRadius: 16,
+    padding: 18,
+    gap: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(220, 228, 221, 0.15)',
   },
-  dividerLine: {
-    flex: 1,
-    height: 1,
-    backgroundColor: 'rgba(255, 255, 255, 0.15)',
-  },
-  dividerLabel: {
-    ...typography.caption,
-    fontSize: 10,
-    fontWeight: '700',
-    color: '#94A3B8',
-  },
-  agentInviteBtn: {
+  bulletItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    paddingVertical: spacing.sm,
-    paddingHorizontal: spacing.md,
+    gap: 10,
   },
-  agentInviteText: {
-    ...typography.caption,
-    fontSize: 12,
-    color: '#E2E8F0',
+  bulletText: {
+    fontSize: 13,
+    color: '#F7F8F5',
+    fontWeight: '500',
+    flex: 1,
+    lineHeight: 18,
   },
-  agentInviteHighlight: {
-    color: '#06EFAC',
+  footer: {
+    gap: 12,
+  },
+  primaryButton: {
+    backgroundColor: '#2F6B4F',
+    borderRadius: 12,
+    paddingVertical: 15,
+    paddingHorizontal: 20,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  primaryButtonText: {
+    fontSize: 16,
     fontWeight: '700',
-    textDecorationLine: 'underline',
+    color: '#FFFFFF',
+  },
+  secondaryButton: {
+    backgroundColor: 'transparent',
+    borderRadius: 12,
+    paddingVertical: 14,
+    paddingHorizontal: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1.5,
+    borderColor: 'rgba(220, 228, 221, 0.35)',
+  },
+  secondaryButtonText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#F7F8F5',
+  },
+  disclaimerText: {
+    fontSize: 11,
+    color: '#94A3B8',
+    textAlign: 'center',
+    marginTop: 4,
   },
 });

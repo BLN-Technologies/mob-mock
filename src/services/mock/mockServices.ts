@@ -14,10 +14,12 @@ import {
   GradingRecord,
   Offer,
   Order,
+  OrderAllocation,
   Dispute,
   AppNotification,
   OfflineQueueItem,
   SettlementRecord,
+  WarehouseStockGroup,
 } from '../../domain/models';
 import {
   UserRole,
@@ -48,6 +50,7 @@ import {
 } from '../../domain/workflows/settlementWorkflow';
 import { calculateBuyerFee, calculateSupplierPayout } from '../../domain/calculations/feeCalculator';
 import { projectLotForBuyer } from '../../domain/projections/buyerProjections';
+import { aggregateWarehouseStock } from '../../domain/projections/warehouseStock';
 import { localStorage } from '../../data/local/storage';
 import { syncCoordinator } from '../sync/syncCoordinator';
 import { mockSyncAdapter } from '../sync/syncAdapter';
@@ -56,6 +59,7 @@ import {
   SupplierRegistrationInput,
   BuyerRegistrationInput,
   AgentInviteRegistrationInput,
+  UnifiedRegistrationInput,
   LoginInput,
   AuthResult,
   SessionValidationResult,
@@ -199,6 +203,127 @@ export const authService: IAuthService & {
     // In demo mode, require simulated OTP for all first device logins
     await localStorage.setSessionUser(user);
     return { user, requiresOtp: true, organization: org };
+  },
+
+  async registerAccount(input: UnifiedRegistrationInput): Promise<AuthResult> {
+    if (!input.fullName || !input.fullName.trim()) {
+      throw new Error('Full name is required.');
+    }
+    if (!input.acceptedTerms) {
+      throw new Error('You must accept Cargo Terms & Conditions and Privacy Policy.');
+    }
+
+    let cleanPhone = '';
+    let cleanEmail = '';
+
+    if (input.phone && input.phone.trim()) {
+      cleanPhone = normalizeRwandanPhone(input.phone);
+      if (cleanPhone.length < 10) {
+        throw new Error('A valid Rwandan phone number is required (e.g. +250 788 123 456).');
+      }
+    }
+
+    if (input.email && input.email.trim()) {
+      cleanEmail = input.email.trim().toLowerCase();
+      if (!isValidEmail(cleanEmail)) {
+        throw new Error('Please enter a valid email address.');
+      }
+    }
+
+    if (!cleanPhone && !cleanEmail) {
+      throw new Error('Please provide an email address or a valid Rwandan phone number.');
+    }
+
+    // Check duplicate
+    const existing = usersState.find(
+      u => (cleanPhone && u.phone === cleanPhone) || (cleanEmail && u.email.toLowerCase() === cleanEmail)
+    );
+    if (existing) {
+      throw new Error('An account with this phone number or email already exists.');
+    }
+
+    const orgId = `org-pending-${Date.now()}`;
+    const newOrg: Organization = {
+      id: orgId,
+      name: `${input.fullName.trim()}'s Organization`,
+      type: OrganizationType.BUYER,
+      registrationNumber: `RW/2026/${Math.floor(1000 + Math.random() * 9000)}`,
+      district: 'Kigali',
+      sector: 'Nyarugenge',
+      contactPerson: input.fullName.trim(),
+      phone: cleanPhone || '+250788000000',
+      verificationStatus: VerificationStatus.PENDING,
+      createdAt: new Date().toISOString(),
+    };
+    organizationsState.unshift(newOrg);
+
+    const newUser: User = {
+      id: `usr-${Date.now()}`,
+      fullName: input.fullName.trim(),
+      phone: cleanPhone,
+      email: cleanEmail || `${input.fullName.trim().toLowerCase().replace(/[^a-z0-9]/g, '.')}@cargo.rw`,
+      role: UserRole.BUYER, // Initial default pending backend assignment upon approval
+      organizationId: orgId,
+      preferredLanguage: input.preferredLanguage || 'rw',
+      isActive: true,
+      isLocked: false,
+      failedLoginAttempts: 0,
+      onboardingCompleted: false,
+      contactVerified: false,
+      approvalStatus: 'PENDING',
+      verificationStatus: VerificationStatus.PENDING,
+      verificationCode: '123456',
+      createdAt: new Date().toISOString(),
+    };
+
+    usersState.unshift(newUser);
+    await localStorage.setSessionUser(newUser);
+    return { user: newUser, requiresOtp: true, organization: newOrg };
+  },
+
+  async verifyContact(code: string, userId?: string): Promise<{ success: boolean; user: User }> {
+    const targetUserId = userId || (await localStorage.getSessionUser())?.id;
+    const user = usersState.find(u => u.id === targetUserId);
+    if (!user) {
+      throw new Error('User session not found.');
+    }
+    const clean = code ? code.trim() : '';
+    if (clean === (user.verificationCode || '123456') && clean !== '000000') {
+      user.contactVerified = true;
+      user.verificationStatus = VerificationStatus.VERIFIED;
+      await localStorage.setSessionUser(user);
+      return { success: true, user };
+    }
+    return { success: false, user };
+  },
+
+  async checkApprovalStatus(userId: string): Promise<{ approvalStatus: 'PENDING' | 'APPROVED' | 'REJECTED'; user: User }> {
+    const user = usersState.find(u => u.id === userId);
+    if (!user) {
+      throw new Error('User not found.');
+    }
+    return { approvalStatus: user.approvalStatus || 'PENDING', user };
+  },
+
+  async simulateCargoApproval(userId: string, role?: UserRole): Promise<User> {
+    const user = usersState.find(u => u.id === userId);
+    if (!user) {
+      throw new Error('User not found.');
+    }
+    user.approvalStatus = 'APPROVED';
+    user.contactVerified = true;
+    if (role) {
+      user.role = role;
+    }
+    const org = organizationsState.find(o => o.id === user.organizationId);
+    if (org) {
+      org.verificationStatus = VerificationStatus.VERIFIED;
+      if (user.role === UserRole.SUPPLIER) {
+        org.type = OrganizationType.SUPPLIER;
+      }
+    }
+    await localStorage.setSessionUser(user);
+    return user;
   },
 
   async registerSupplier(input: SupplierRegistrationInput): Promise<AuthResult> {
@@ -568,6 +693,7 @@ export const lotService = {
       supplierId: user.id,
       organizationId: user.organizationId,
       cropName: input.cropName,
+      cropType: input.cropType || 'NON_PERISHABLE',
       variety: input.variety,
       totalQuantityKg: input.totalQuantityKg,
       remainingQuantityKg: input.totalQuantityKg,
@@ -669,12 +795,123 @@ export const lotService = {
 
 // 3. Quality & Grading Service
 export const gradingService = {
-  async getAgentTasks(): Promise<{ lot: Lot; org?: Organization }[]> {
-    const pendingLots = lotsState.filter(l => l.status === LotStatus.SUBMITTED);
-    return pendingLots.map(lot => ({
-      lot,
-      org: organizationsState.find(o => o.id === lot.organizationId),
-    }));
+  async getAgentTasks(options?: {
+    district?: string;
+    statusFilter?: 'ALL' | 'PENDING' | 'COMPLETED' | 'OVERDUE';
+    agentDistrict?: string;
+  }): Promise<{ lot: Lot; org?: Organization; isOverdue: boolean; deadlineHoursLeft: number }[]> {
+    const filter = options?.statusFilter || 'PENDING';
+    const now = Date.now();
+    const OVERDUE_THRESHOLD_MS = 24 * 60 * 60 * 1000; // 24 hours deadline
+
+    let results = lotsState.map(lot => {
+      const createdTime = new Date(lot.createdAt).getTime();
+      const elapsedMs = now - createdTime;
+      const isOverdue = !lot.grade && elapsedMs > OVERDUE_THRESHOLD_MS;
+      const hoursLeft = Math.max(0, Math.round((OVERDUE_THRESHOLD_MS - elapsedMs) / (60 * 60 * 1000)));
+
+      return {
+        lot,
+        org: organizationsState.find(o => o.id === lot.organizationId),
+        isOverdue,
+        deadlineHoursLeft: hoursLeft,
+      };
+    });
+
+    // District filter
+    const targetDistrict = options?.district || options?.agentDistrict;
+    if (targetDistrict && targetDistrict !== 'All' && targetDistrict !== 'ALL') {
+      results = results.filter(
+        r => r.lot.pickupDistrict.toLowerCase() === targetDistrict.toLowerCase()
+      );
+    }
+
+    // Status filter
+    if (filter === 'PENDING') {
+      results = results.filter(r => r.lot.status === LotStatus.SUBMITTED && !r.isOverdue);
+    } else if (filter === 'OVERDUE') {
+      results = results.filter(r => r.lot.status === LotStatus.SUBMITTED && r.isOverdue);
+    } else if (filter === 'COMPLETED') {
+      results = results.filter(
+        r => !!r.lot.grade || r.lot.status === LotStatus.VERIFIED || !!r.lot.adminApprovedAt
+      );
+    }
+
+    return results;
+  },
+
+  checkEditEligibility(record: GradingRecord): { canEdit: boolean; remainingSeconds: number; reason?: string } {
+    if (!record.editDeadline) {
+      return { canEdit: false, remainingSeconds: 0, reason: 'Record does not permit post-submission editing.' };
+    }
+
+    // Check if lot has already been approved by admin
+    const lot = lotsState.find(l => l.id === record.lotId);
+    if (lot?.adminApprovedAt) {
+      return { canEdit: false, remainingSeconds: 0, reason: 'Inspection has been finalized by operations admin.' };
+    }
+
+    const now = Date.now();
+    const deadline = new Date(record.editDeadline).getTime();
+    const diffSeconds = Math.round((deadline - now) / 1000);
+
+    if (diffSeconds <= 0) {
+      return { canEdit: false, remainingSeconds: 0, reason: 'The 5-minute post-submission editing window has expired.' };
+    }
+
+    return { canEdit: true, remainingSeconds: diffSeconds };
+  },
+
+  async updateGrading(
+    recordId: string,
+    agent: User,
+    updates: {
+      moisture: number;
+      foreignMatter: number;
+      defects: number;
+      notes?: string;
+      checklist?: Record<string, boolean>;
+    }
+  ): Promise<GradingRecord> {
+    const record = gradingRecordsState.find(r => r.id === recordId);
+    if (!record) throw new Error('Grading record not found');
+
+    const eligibility = this.checkEditEligibility(record);
+    if (!eligibility.canEdit) {
+      throw new Error(eligibility.reason || 'Editing is not permitted');
+    }
+
+    // Recalculate grade based on updated measurements
+    let newGrade = QualityGrade.GRADE_A;
+    if (updates.moisture > 14.5 || updates.foreignMatter > 2.0 || updates.defects > 4.0) {
+      newGrade = QualityGrade.GRADE_C;
+    } else if (updates.moisture > 13.5 || updates.foreignMatter > 1.0 || updates.defects > 2.0) {
+      newGrade = QualityGrade.GRADE_B;
+    }
+
+    record.moisturePercentage = updates.moisture;
+    record.foreignMatterPercentage = updates.foreignMatter;
+    record.defectiveRatePercentage = updates.defects;
+    record.calculatedGrade = newGrade;
+    record.finalGrade = newGrade;
+    if (updates.notes !== undefined) record.notes = updates.notes;
+    if (updates.checklist) record.checklist = updates.checklist;
+    record.updatedAt = new Date().toISOString();
+
+    if (!record.editHistory) record.editHistory = [];
+    record.editHistory.push({
+      editedAt: new Date().toISOString(),
+      editorId: agent.id,
+      changes: `Updated measurements: moisture=${updates.moisture}%, fm=${updates.foreignMatter}%, defects=${updates.defects}%. Grade: ${newGrade}`,
+    });
+
+    const lot = lotsState.find(l => l.id === record.lotId);
+    if (lot) {
+      lot.grade = newGrade;
+      lot.updatedAt = new Date().toISOString();
+    }
+
+    return record;
   },
 
   async submitGrading(
@@ -683,7 +920,8 @@ export const gradingService = {
     measurements: { moisture: number; foreignMatter: number; defects: number },
     photos: string[],
     notes: string,
-    gps?: { lat: number; lng: number }
+    gps?: { lat: number; lng: number },
+    checklist?: Record<string, boolean>
   ): Promise<GradingRecord> {
     const lot = lotsState.find(l => l.id === lotId);
     if (!lot) throw new Error('Lot not found');
@@ -695,6 +933,10 @@ export const gradingService = {
     } else if (measurements.moisture > 13.5 || measurements.foreignMatter > 1.0 || measurements.defects > 2.0) {
       calculatedGrade = QualityGrade.GRADE_B;
     }
+
+    const submissionTime = new Date();
+    // 5-minute post-submission editing window
+    const editDeadline = new Date(submissionTime.getTime() + 5 * 60 * 1000);
 
     const gradingRecord: GradingRecord = {
       id: `grd-${Date.now()}`,
@@ -714,9 +956,13 @@ export const gradingService = {
       photos,
       gpsLatitude: gps?.lat,
       gpsLongitude: gps?.lng,
+      checklist: checklist || {},
+      submissionTimestamp: submissionTime.toISOString(),
+      editDeadline: editDeadline.toISOString(),
+      editHistory: [],
       notes,
       isOfflineSubmission: isSimulatedOffline,
-      createdAt: new Date().toISOString(),
+      createdAt: submissionTime.toISOString(),
     };
 
     gradingRecordsState.push(gradingRecord);
@@ -729,9 +975,10 @@ export const gradingService = {
 
     // Server authoritative update: Field inspection complete, awaiting administrative approval (BR-02)
     lot.grade = calculatedGrade;
-    lot.gradedAt = new Date().toISOString();
+    lot.gradedAt = submissionTime.toISOString();
     lot.inspectedByAgentId = agent.id;
-    lot.updatedAt = new Date().toISOString();
+    lot.status = LotStatus.INSPECTION; // Lot transitions to inspected state
+    lot.updatedAt = submissionTime.toISOString();
 
     // Notify supplier
     notificationsState.unshift({
@@ -743,7 +990,7 @@ export const gradingService = {
       messageEn: `Your lot was graded ${calculatedGrade} and is awaiting administrative operations approval before market listing.`,
       messageRw: `Umusaruro wawe wabonye ${calculatedGrade} utegereje kwemezwa n'ubuyobozi bwa Cargo mbere yo kwinjira ku isoko.`,
       isRead: false,
-      createdAt: new Date().toISOString(),
+      createdAt: submissionTime.toISOString(),
     });
 
     return gradingRecord;
@@ -1449,4 +1696,146 @@ export const offlineQueueService = {
     return syncCoordinator.discardItem(itemId);
   },
 };
+
+// 8. Central Warehouse Aggregated Stock Service
+export const warehouseService = {
+  async getAggregatedStock(): Promise<WarehouseStockGroup[]> {
+    return aggregateWarehouseStock(lotsState);
+  },
+
+  async getStockGroupById(id: string): Promise<WarehouseStockGroup | null> {
+    const groups = aggregateWarehouseStock(lotsState);
+    return groups.find(g => g.id === id) || null;
+  },
+
+  async placeOrderFromStock(
+    buyerUser: User,
+    input: {
+      stockGroupId: string;
+      quantityKg: number;
+      deliveryDistrict: string;
+      deliverySector?: string;
+      deliveryAddress?: string;
+      agreedDeliveryDate?: string;
+    }
+  ): Promise<Order> {
+    if (buyerUser.role !== UserRole.BUYER) {
+      throw new Error('Only authorized institutional buyers can purchase warehouse stock.');
+    }
+
+    if (input.quantityKg <= 0 || isNaN(input.quantityKg)) {
+      throw new Error('Quantity must be greater than zero.');
+    }
+
+    const groups = aggregateWarehouseStock(lotsState);
+    const stockGroup = groups.find(g => g.id === input.stockGroupId);
+    if (!stockGroup) {
+      throw new Error('Selected warehouse stock group is not available.');
+    }
+
+    if (input.quantityKg > stockGroup.availableToOrderKg) {
+      throw new Error(
+        `Requested quantity (${input.quantityKg.toLocaleString()} kg) exceeds currently available unreserved stock (${stockGroup.availableToOrderKg.toLocaleString()} kg).`
+      );
+    }
+
+    // Server-side atomic allocation across eligible supplier lots (FIFO / earliest availability)
+    let remainingToAllocate = input.quantityKg;
+    const allocations: OrderAllocation[] = [];
+    const contributingLots = lotsState
+      .filter(l => stockGroup.contributingLotIds.includes(l.id) && l.remainingQuantityKg > (l.reservedQuantityKg || 0))
+      .sort((a, b) => new Date(a.availabilityDate).getTime() - new Date(b.availabilityDate).getTime());
+
+    for (const lot of contributingLots) {
+      if (remainingToAllocate <= 0) break;
+      const unreservedInLot = lot.remainingQuantityKg;
+      const allocatedFromThisLot = Math.min(unreservedInLot, remainingToAllocate);
+
+      lot.remainingQuantityKg -= allocatedFromThisLot;
+      lot.reservedQuantityKg = (lot.reservedQuantityKg || 0) + allocatedFromThisLot;
+      if (lot.remainingQuantityKg === 0) {
+        lot.status = LotStatus.RESERVED;
+      }
+      lot.updatedAt = new Date().toISOString();
+
+      remainingToAllocate -= allocatedFromThisLot;
+
+      const subtotalRwf = Math.round(allocatedFromThisLot * lot.pricePerKgRwf);
+      const supplierFeeCalc = calculateSupplierPayout(subtotalRwf);
+      const supplierOrg = organizationsState.find(o => o.id === lot.organizationId);
+
+      allocations.push({
+        id: `alloc-${Date.now()}-${allocations.length}`,
+        lotId: lot.id,
+        lotCode: lot.lotCode,
+        supplierOrgId: lot.organizationId,
+        supplierOrgName: supplierOrg?.name || 'Partner Agricultural Cooperative',
+        quantityKg: allocatedFromThisLot,
+        pricePerKgRwf: lot.pricePerKgRwf,
+        subtotalRwf,
+        supplierFeeRwf: supplierFeeCalc.supplierFeeRwf,
+        expectedSupplierPayoutRwf: supplierFeeCalc.netPayoutRwf,
+        confirmedBySupplier: true,
+        confirmedAt: new Date().toISOString(),
+      });
+    }
+
+    if (remainingToAllocate > 0) {
+      // Rollback allocations in case of concurrency conflict
+      for (const alloc of allocations) {
+        const lot = lotsState.find(l => l.id === alloc.lotId);
+        if (lot) {
+          lot.remainingQuantityKg += alloc.quantityKg;
+          lot.reservedQuantityKg = Math.max(0, (lot.reservedQuantityKg || 0) - alloc.quantityKg);
+          lot.status = LotStatus.VERIFIED;
+        }
+      }
+      throw new Error('Stock reservation conflict: concurrent allocation prevented order completion.');
+    }
+
+    const subtotalRwf = allocations.reduce((acc, a) => acc + a.subtotalRwf, 0);
+    const averagePricePerKgRwf = Math.round(subtotalRwf / input.quantityKg);
+    const buyerFeeCalc = calculateBuyerFee(subtotalRwf);
+    const orderCount = ordersState.length + 1;
+    const orderNumber = `ORD-202610-${String(orderCount).padStart(3, '0')}`;
+    const buyerOrg = organizationsState.find(o => o.id === buyerUser.organizationId);
+
+    const newOrder: Order = {
+      id: `ord-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+      orderNumber,
+      offerId: `off-wh-${Date.now()}`,
+      buyerOrgId: buyerUser.organizationId,
+      buyerOrgName: buyerOrg?.name || `${buyerUser.fullName}'s Enterprise`,
+      cropName: stockGroup.cropName,
+      grade: stockGroup.grade,
+      totalQuantityKg: input.quantityKg,
+      pricePerKgRwf: averagePricePerKgRwf,
+      subtotalRwf,
+      buyerFeeRwf: buyerFeeCalc.buyerFeeRwf,
+      totalAmountRwf: buyerFeeCalc.totalBuyerPayableRwf,
+      allocations,
+      deliveryDistrict: input.deliveryDistrict,
+      deliverySector: input.deliverySector || 'Kigali Central',
+      deliveryAddress: input.deliveryAddress || 'Central Receiving Facility, Kigali',
+      agreedDeliveryDate: input.agreedDeliveryDate || stockGroup.availabilityDate,
+      status: OrderStatus.CONFIRMED,
+      termsAcceptedByBuyer: true,
+      termsAcceptedByBuyerAt: new Date().toISOString(),
+      termsAcceptedByBuyerUserId: buyerUser.id,
+      paymentStatus: PaymentStatus.PENDING,
+      hasActiveDispute: false,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+
+    ordersState.unshift(newOrder);
+
+    // Create linked settlement records for suppliers (BR-04)
+    const settlements = createSettlementsFromOrder(newOrder);
+    settlementsState.push(...settlements);
+
+    return newOrder;
+  },
+};
+
 

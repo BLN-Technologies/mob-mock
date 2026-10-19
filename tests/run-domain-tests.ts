@@ -16,7 +16,9 @@ import { projectLotForBuyer, projectAllocationsForBuyer } from '../src/domain/pr
 import { LotStatus, OrderStatus, QualityGrade, PaymentStatus, UserRole, VerificationStatus, OfferStatus, DisputeStatus, DisputeOutcome, PaymentMethod, SyncStatus, SyncErrorCategory } from '../src/domain/enums';
 import { Lot, Order, User, Organization, GradingRecord, Offer, SettlementRecord, Dispute, OfflineQueueItem, InspectionDraft } from '../src/domain/models';
 import { resolveAuthenticatedRoute, canAccessDestination } from '../src/core/navigation/routingPolicy';
-import { authService, normalizeRwandanPhone, isValidEmail, mockState, lotService, gradingService, adminApprovalService, offerService, orderService, disputeService, settlementService, offlineQueueService } from '../src/services/mock/mockServices';
+import { authService, normalizeRwandanPhone, isValidEmail, mockState, lotService, gradingService, adminApprovalService, offerService, orderService, disputeService, settlementService, offlineQueueService, warehouseService } from '../src/services/mock/mockServices';
+import { aggregateWarehouseStock } from '../src/domain/projections/warehouseStock';
+import { RWANDA_DISTRICTS } from '../src/data/locations/rwandaLocations';
 import { SEED_USERS } from '../src/services/mock/seedData';
 import { inspectionRepository } from '../src/data/local/inspectionRepository';
 import { syncCoordinator } from '../src/services/sync/syncCoordinator';
@@ -1811,6 +1813,198 @@ async function runAllTests() {
 
     assert(order1.hasActiveDispute === false, 'Order 1 active dispute flag cleared');
     assert(order1Settlements.every(s => s.status === 'ELIGIBLE'), 'Order 1 settlements unpaused and now ELIGIBLE');
+  }
+
+  // 25. Phase 6.5 Approval-Based Authentication & Role Independence
+  console.log('[Suite 25: Phase 6.5 Approval-Based Authentication & Role Independence]');
+  {
+    // Registration without self-assigned role
+    const regRes = await authService.registerAccount({
+      fullName: 'Emmanuel Rutayisire',
+      phone: '0789111222',
+      password: 'SecurePassword123',
+      acceptedTerms: true,
+    });
+
+    assert(Boolean(regRes.user), 'Registration succeeds without public role selection');
+    assert(regRes.user.contactVerified === false, 'New account requires contact verification (contactVerified=false)');
+    assert(regRes.user.approvalStatus === 'PENDING', 'New account requires Cargo Operations approval (approvalStatus=PENDING)');
+
+    // Routing policy blocks dashboard access before verification and approval
+    const unverifiedRoute = resolveAuthenticatedRoute(regRes.user);
+    assert(unverifiedRoute.destination === 'VERIFICATION', 'Unverified user routes to VERIFICATION');
+    assert(canAccessDestination('BUYER_WORKSPACE', regRes.user) === false, 'Unverified user cannot access BUYER_WORKSPACE');
+    assert(canAccessDestination('SUPPLIER_WORKSPACE', regRes.user) === false, 'Unverified user cannot access SUPPLIER_WORKSPACE');
+
+    // Reject wrong verification code
+    const badCodeRes = await authService.verifyContact('000000', regRes.user.id);
+    assert(badCodeRes.success === false, 'Rejects invalid verification code');
+
+    // Confirm with correct code
+    const correctCode = regRes.user.verificationCode || '123456';
+    const verifyRes = await authService.verifyContact(correctCode, regRes.user.id);
+    assert(verifyRes.success === true, 'Accepts valid verification code');
+    assert(verifyRes.user.contactVerified === true, 'User contact is now verified');
+    assert(verifyRes.user.approvalStatus === 'PENDING', 'Account remains in PENDING approval after contact verification');
+
+    // Routing policy holds verified user in APPROVAL_PENDING before role assignment
+    const pendingRoute = resolveAuthenticatedRoute(verifyRes.user);
+    assert(pendingRoute.destination === 'APPROVAL_PENDING', 'Verified user awaits Cargo Operations approval');
+    assert(canAccessDestination('BUYER_WORKSPACE', verifyRes.user) === false, 'Pending approval user cannot access dashboard');
+
+    // Operations assigns role: BUYER
+    const approvedBuyer = await authService.simulateCargoApproval(verifyRes.user.id, UserRole.BUYER);
+    assert(approvedBuyer.approvalStatus === 'APPROVED', 'Account approvalStatus is now APPROVED');
+    assert(approvedBuyer.role === UserRole.BUYER, 'Backend assigns role BUYER');
+
+    const buyerOnboardRoute = resolveAuthenticatedRoute(approvedBuyer);
+    assert(buyerOnboardRoute.destination === 'ONBOARDING_BUYER', 'Approved Buyer routes to business onboarding for TIN');
+
+    // Operations assigns role: FIELD_AGENT
+    const inspectorUser = await authService.simulateCargoApproval(verifyRes.user.id, UserRole.FIELD_AGENT);
+    assert(inspectorUser.role === UserRole.FIELD_AGENT, 'Backend authorizes Field Inspector');
+  }
+
+  // 26. Phase 6.5 Central Warehouse Stock Aggregation & Atomic Allocation
+  console.log('[Suite 26: Phase 6.5 Central Warehouse Stock Aggregation & Atomic Allocation]');
+  {
+    // Aggregate warehouse stock across existing eligible lots
+    const allStock = await warehouseService.getAggregatedStock();
+    assert(allStock.length > 0, 'Returns aggregated central warehouse stock groups');
+
+    for (const group of allStock) {
+      assert(group.totalEligibleQuantityKg >= group.availableToOrderKg, 'Total eligible quantity >= available to order');
+      assert(group.totalEligibleQuantityKg === group.availableToOrderKg + group.reservedQuantityKg, 'Total = available + reserved');
+      assert(group.grade !== QualityGrade.REJECT, 'Aggregated warehouse stock strictly excludes rejected lots (BR-02)');
+      assert(Boolean(group.hubLocation), 'Aggregated stock provides macro hub location');
+      // Farmer privacy: No private supplier IDs or phones leaked in group
+      assert((group as any).supplierId === undefined, 'Stock group strips supplierId (BR-05)');
+      assert((group as any).supplierPhone === undefined, 'Stock group strips supplierPhone (BR-05)');
+    }
+
+    // Atomic order placement across aggregated stock
+    const targetGroup = allStock.find(g => g.availableToOrderKg >= 500);
+    if (targetGroup) {
+      const orderQty = 500;
+      const initialAvailable = targetGroup.availableToOrderKg;
+      const buyerUser = SEED_USERS.find(u => u.role === UserRole.BUYER)!;
+
+      const order = await warehouseService.placeOrderFromStock(buyerUser, {
+        stockGroupId: targetGroup.id,
+        quantityKg: orderQty,
+        deliveryDistrict: 'Gasabo',
+        deliveryAddress: 'Kigali Central Receiving Facility',
+      });
+
+      assert(Boolean(order), 'Atomic order placement from central warehouse stock succeeds');
+      assert(order.status === OrderStatus.CONFIRMED, 'Generated order starts in CONFIRMED state');
+      assert(order.totalQuantityKg === orderQty, 'Allocated order quantity matches requested quantity');
+      assert(order.buyerFeeRwf === Math.round(order.subtotalRwf * 0.05), 'Buyer platform fee is exactly 5% (BR-04)');
+
+      // Verify stock group available quantity is reduced atomically
+      const updatedGroup = await warehouseService.getStockGroupById(targetGroup.id);
+      assert(updatedGroup!.availableToOrderKg === initialAvailable - orderQty, 'Available stock reduced by order quantity');
+      assert(updatedGroup!.reservedQuantityKg === targetGroup.reservedQuantityKg + orderQty, 'Reserved stock increased by order quantity');
+    }
+  }
+
+  // 27. Phase 6.5 Supplier Flow & Lot Status Lifecycle
+  console.log('[Suite 27: Phase 6.5 Supplier Flow & Lot Status Lifecycle]');
+  {
+    const supplierUser = SEED_USERS.find(u => u.role === UserRole.SUPPLIER)!;
+
+    // Lot declaration without harvest date input (today's date passed internally while asserting harvest readiness)
+    const newLot = await lotService.createLot(
+      {
+        cropName: 'Dry Beans',
+        cropType: 'NON_PERISHABLE',
+        variety: 'Colta',
+        totalQuantityKg: 3500,
+        pricePerKgRwf: 680,
+        harvestDate: new Date().toISOString().split('T')[0],
+        availabilityDate: new Date(Date.now() + 86400000).toISOString().split('T')[0],
+        pickupDistrict: 'Nyagatare',
+        pickupSector: 'Katabagemu',
+        pickupLocationDetails: 'Cooperative Central Warehouse',
+        photos: ['https://example.com/lot-beans-01.jpg'],
+        harvestConfirmed: true,
+      },
+      supplierUser
+    );
+
+    assert(newLot.status === LotStatus.SUBMITTED, 'New lot starts in SUBMITTED status');
+    assert(newLot.cropType === 'NON_PERISHABLE', 'Preserves perishable/non-perishable crop type');
+
+    // Transitions through full Phase 6.5 lifecycle: SUBMITTED -> INSPECTION -> VERIFIED -> RESERVED -> DELIVERY -> DELIVERED
+    assert(canTransitionLot(LotStatus.SUBMITTED, LotStatus.INSPECTION), 'Can transition SUBMITTED -> INSPECTION');
+    assert(canTransitionLot(LotStatus.INSPECTION, LotStatus.VERIFIED), 'Can transition INSPECTION -> VERIFIED');
+    assert(canTransitionLot(LotStatus.VERIFIED, LotStatus.RESERVED), 'Can transition VERIFIED -> RESERVED');
+    assert(canTransitionLot(LotStatus.RESERVED, LotStatus.DELIVERY), 'Can transition RESERVED -> DELIVERY');
+    assert(canTransitionLot(LotStatus.DELIVERY, LotStatus.DELIVERED), 'Can transition DELIVERY -> DELIVERED');
+  }
+
+  // 28. Phase 6.5 Field Inspector District Tasks, 5-Minute Edit Window & Checklists
+  console.log('[Suite 28: Phase 6.5 Field Inspector District Tasks, 5-Minute Edit Window & Checklists]');
+  {
+    const agentUser = SEED_USERS.find(u => u.role === UserRole.FIELD_AGENT)!;
+
+    // District-based task filtering
+    const nyagatareTasks = await gradingService.getAgentTasks({
+      district: 'Nyagatare',
+      statusFilter: 'ALL',
+    });
+    assert(nyagatareTasks.every(t => t.lot.pickupDistrict.toLowerCase() === 'nyagatare'), 'Filters tasks strictly by authorized district');
+
+    // Authoritative Rwanda locations
+    assert(RWANDA_DISTRICTS.includes('Nyagatare'), 'Authoritative locations contain Nyagatare');
+    assert(RWANDA_DISTRICTS.includes('Gasabo'), 'Authoritative locations contain Gasabo');
+    assert(RWANDA_DISTRICTS.length === 30, 'Authoritative locations contains all 30 Rwandan districts');
+
+    // Submit grading with checklist
+    const pendingTasks = await gradingService.getAgentTasks({ statusFilter: 'PENDING' });
+    const lotToGrade = pendingTasks[0]?.lot;
+    if (lotToGrade) {
+      const grading = await gradingService.submitGrading(
+        lotToGrade.id,
+        agentUser,
+        { moisture: 13.0, foreignMatter: 0.8, defects: 1.2 },
+        [],
+        'Complies with standard jute bags and dry depot.',
+        { lat: -1.298, lng: 30.334 },
+        {
+          identity_match: true,
+          variety_verified: true,
+          packaging_intact: true,
+          contamination_check: true,
+          storage_dryness: true,
+        }
+      );
+
+      assert(grading.calculatedGrade === QualityGrade.GRADE_A, 'Calculates Grade A based on threshold criteria');
+      assert(grading.submissionTimestamp !== undefined, 'Records submissionTimestamp');
+      assert(grading.editDeadline !== undefined, 'Sets 5-minute editDeadline');
+
+      // 5-minute post-submission editing window eligibility check
+      const eligibility = gradingService.checkEditEligibility(grading);
+      assert(eligibility.canEdit === true, 'Permits post-submission editing within 5 minutes');
+      assert(eligibility.remainingSeconds > 0 && eligibility.remainingSeconds <= 300, 'Remaining time is <= 300 seconds');
+
+      // Update inspection within the 5-minute window
+      const updated = await gradingService.updateGrading(grading.id, agentUser, {
+        moisture: 13.8, // Should shift grade to Grade B (>13.5)
+        foreignMatter: 0.8,
+        defects: 1.2,
+        notes: 'Adjusted moisture meter calibration readings.',
+      });
+
+      assert(updated.calculatedGrade === QualityGrade.GRADE_B, 'Recalculates grade dynamically to Grade B upon updated moisture');
+      assert(updated.editHistory !== undefined && updated.editHistory.length > 0, 'Maintains tamper-evident audit history of permitted edits');
+
+      // Expired deadline rejects editing
+      const expiredRecord = { ...grading, editDeadline: new Date(Date.now() - 60000).toISOString() };
+      const expiredCheck = gradingService.checkEditEligibility(expiredRecord);
+      assert(expiredCheck.canEdit === false, 'Locks editing once 5-minute deadline has expired');
+    }
   }
 
   console.log(`\n========================================`);

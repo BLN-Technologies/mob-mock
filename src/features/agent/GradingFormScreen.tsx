@@ -16,7 +16,7 @@ import { StatusBadge } from '../../components/ui/StatusBadge';
 import { CropBadge } from '../../components/ui/CropBadge';
 import { gradingService, mockState } from '../../services/mock/mockServices';
 import { inspectionRepository } from '../../data/local/inspectionRepository';
-import { Lot, User, Organization } from '../../domain/models';
+import { Lot, User, Organization, GradingRecord } from '../../domain/models';
 import { QualityGrade } from '../../domain/enums';
 import { formatQuantity } from '../../domain/calculations/lotCalculations';
 
@@ -26,7 +26,48 @@ interface GradingFormScreenProps {
   agent: User;
   onSuccess: () => void;
   onCancel: () => void;
+  existingRecord?: GradingRecord;
 }
+
+interface ChecklistItem {
+  id: string;
+  label: string;
+  description: string;
+  required: boolean;
+}
+
+const CHECKLIST_ITEMS: ChecklistItem[] = [
+  {
+    id: 'identity_match',
+    label: 'Lot Identity & Declaration Match',
+    description: 'Bags, markings, and declared quantity correspond with farmer declaration.',
+    required: true,
+  },
+  {
+    id: 'variety_verified',
+    label: 'Crop & Variety Verification',
+    description: 'Grain sample visually conforms to declared variety and uniformity.',
+    required: true,
+  },
+  {
+    id: 'packaging_intact',
+    label: 'Packaging & Bag Integrity',
+    description: 'Stored in clean, undamaged standard jute or polypropylene bags.',
+    required: true,
+  },
+  {
+    id: 'contamination_check',
+    label: 'Contamination & Foreign Matter Inspection',
+    description: 'No chemical smells, mold, living weevils, or dangerous foreign matter.',
+    required: true,
+  },
+  {
+    id: 'storage_dryness',
+    label: 'Storage & Pickup Site Readiness',
+    description: 'Depot floor is dry, raised on wooden pallets, and weatherproof.',
+    required: true,
+  },
+];
 
 export const GradingFormScreen: React.FC<GradingFormScreenProps> = ({
   lot,
@@ -34,41 +75,89 @@ export const GradingFormScreen: React.FC<GradingFormScreenProps> = ({
   agent,
   onSuccess,
   onCancel,
+  existingRecord,
 }) => {
   const { t } = useTranslation();
-  const [moisture, setMoisture] = useState('13.2');
-  const [foreignMatter, setForeignMatter] = useState('0.8');
-  const [defects, setDefects] = useState('1.5');
-  const [notes, setNotes] = useState('Sample taken from 5 bags randomly. Grain clean and dry.');
+  const [moisture, setMoisture] = useState(
+    existingRecord ? String(existingRecord.moisturePercentage) : '13.2'
+  );
+  const [foreignMatter, setForeignMatter] = useState(
+    existingRecord ? String(existingRecord.foreignMatterPercentage) : '0.8'
+  );
+  const [defects, setDefects] = useState(
+    existingRecord ? String(existingRecord.defectiveRatePercentage) : '1.5'
+  );
+  const [notes, setNotes] = useState(
+    existingRecord
+      ? existingRecord.notes
+      : 'Sample taken from 5 bags randomly. Grain clean, uniform, and dry.'
+  );
+  const [checklist, setChecklist] = useState<Record<string, boolean>>(
+    existingRecord?.checklist || {
+      identity_match: false,
+      variety_verified: false,
+      packaging_intact: false,
+      contamination_check: false,
+      storage_dryness: false,
+    }
+  );
+
   const [gps] = useState<{ lat: number; lng: number } | undefined>({
     lat: -1.5973,
     lng: 30.4082,
   });
+
   const [loading, setLoading] = useState(false);
   const [savingDraft, setSavingDraft] = useState(false);
   const [hasSavedDraft, setHasSavedDraft] = useState(false);
   const [draftRestored, setDraftRestored] = useState(false);
 
-  // Restore saved draft on mount if available
-  useEffect(() => {
-    let isMounted = true;
-    inspectionRepository.getDraft(lot.id).then(draft => {
-      if (isMounted && draft) {
-        setMoisture(draft.moisture || '13.2');
-        setForeignMatter(draft.foreignMatter || '0.8');
-        setDefects(draft.defects || '1.5');
-        if (draft.notes) setNotes(draft.notes);
-        setHasSavedDraft(true);
-        setDraftRestored(true);
-      }
-    }).catch(() => {
-      // Ignore read errors
-    });
+  // 5-minute post-submission editing window state
+  const [remainingSeconds, setRemainingSeconds] = useState<number>(0);
+  const [canEditRecord, setCanEditRecord] = useState<boolean>(!existingRecord);
 
-    return () => {
-      isMounted = false;
-    };
-  }, [lot.id]);
+  useEffect(() => {
+    if (existingRecord) {
+      const eligibility = gradingService.checkEditEligibility(existingRecord);
+      setCanEditRecord(eligibility.canEdit);
+      setRemainingSeconds(eligibility.remainingSeconds);
+
+      if (eligibility.canEdit) {
+        const timer = setInterval(() => {
+          setRemainingSeconds(prev => {
+            if (prev <= 1) {
+              clearInterval(timer);
+              setCanEditRecord(false);
+              return 0;
+            }
+            return prev - 1;
+          });
+        }, 1000);
+
+        return () => clearInterval(timer);
+      }
+    } else {
+      // Restore saved draft on mount if available
+      let isMounted = true;
+      inspectionRepository.getDraft(lot.id).then(draft => {
+        if (isMounted && draft) {
+          setMoisture(draft.moisture || '13.2');
+          setForeignMatter(draft.foreignMatter || '0.8');
+          setDefects(draft.defects || '1.5');
+          if (draft.notes) setNotes(draft.notes);
+          if (draft.checklist) setChecklist(draft.checklist);
+          setHasSavedDraft(true);
+          setDraftRestored(true);
+        }
+      }).catch(() => {
+        // Ignore read errors
+      });
+
+      return () => {
+        isMounted = false;
+      };
+    }
+  }, [lot.id, existingRecord]);
 
   // Live proposed grade calculation
   const mVal = parseFloat(moisture) || 0;
@@ -82,6 +171,13 @@ export const GradingFormScreen: React.FC<GradingFormScreenProps> = ({
     calculatedGrade = QualityGrade.GRADE_B;
   }
 
+  const toggleChecklistItem = (id: string) => {
+    if (!canEditRecord) return;
+    setChecklist(prev => ({ ...prev, [id]: !prev[id] }));
+  };
+
+  const allChecklistItemsCompleted = CHECKLIST_ITEMS.every(item => checklist[item.id]);
+
   const handleSaveDraft = async (silent = false) => {
     setSavingDraft(true);
     try {
@@ -93,6 +189,7 @@ export const GradingFormScreen: React.FC<GradingFormScreenProps> = ({
         foreignMatter,
         defects,
         notes,
+        checklist,
         photos: lot.photos || [],
         gps,
         updatedAt: new Date().toISOString(),
@@ -111,6 +208,11 @@ export const GradingFormScreen: React.FC<GradingFormScreenProps> = ({
   };
 
   const handleCancel = () => {
+    if (existingRecord) {
+      onCancel();
+      return;
+    }
+
     Alert.alert(
       t.agent.unsavedChanges,
       t.agent.unsavedChangesMsg,
@@ -133,6 +235,14 @@ export const GradingFormScreen: React.FC<GradingFormScreenProps> = ({
   };
 
   const handleSubmit = async () => {
+    if (!allChecklistItemsCompleted) {
+      Alert.alert(
+        'Checklist Incomplete',
+        'All mandatory physical inspection checklist verification items must be confirmed before submitting (BR-01, FR-QA-02).'
+      );
+      return;
+    }
+
     // Physical validation bounds
     if (mVal < 0 || mVal > 50) {
       Alert.alert('Invalid Moisture', 'Moisture percentage must be between 0% and 50%.');
@@ -149,27 +259,49 @@ export const GradingFormScreen: React.FC<GradingFormScreenProps> = ({
 
     setLoading(true);
     try {
-      await gradingService.submitGrading(
-        lot.id,
-        agent,
-        {
+      if (existingRecord) {
+        // Updating existing within the 5-minute window
+        await gradingService.updateGrading(existingRecord.id, agent, {
           moisture: mVal,
           foreignMatter: fmVal,
           defects: defVal,
-        },
-        lot.photos,
-        notes,
-        gps
-      );
+          notes,
+          checklist,
+        });
 
-      const isOffline = mockState.isOffline();
-      Alert.alert(
-        isOffline ? t.agent.savedLocally : 'Grading Submitted',
-        isOffline
-          ? `You are currently offline. Inspection for lot ${lot.lotCode} was securely saved to durable local storage and enqueued for automatic synchronization when connectivity returns (BR-01, FR-QA-03).`
-          : `Grading recorded successfully as ${calculatedGrade}. In accordance with BR-02, this lot is awaiting Cargo Operations administrative review before buyer marketplace listing.`,
-        [{ text: t.common.done, onPress: onSuccess }]
-      );
+        Alert.alert(
+          'Inspection Updated',
+          `Updated measurements saved successfully. Authority grade confirmed as ${calculatedGrade}.`,
+          [{ text: t.common.done, onPress: onSuccess }]
+        );
+      } else {
+        // Fresh submission
+        await gradingService.submitGrading(
+          lot.id,
+          agent,
+          {
+            moisture: mVal,
+            foreignMatter: fmVal,
+            defects: defVal,
+          },
+          lot.photos || [],
+          notes,
+          gps,
+          checklist
+        );
+
+        // Remove saved draft upon successful submission
+        await inspectionRepository.removeDraft(lot.id);
+
+        const isOffline = mockState.isOffline();
+        Alert.alert(
+          isOffline ? t.agent.savedLocally : 'Grading Submitted',
+          isOffline
+            ? `You are currently offline. Inspection for lot ${lot.lotCode} was securely saved to durable local storage and enqueued for automatic synchronization when connectivity returns (BR-01, FR-QA-03).`
+            : `Grading recorded successfully as ${calculatedGrade}. In accordance with BR-02, this lot is awaiting Cargo Operations administrative review before buyer marketplace listing.\n\nYou have a 5-minute window to edit these measurements if needed.`,
+          [{ text: t.common.done, onPress: onSuccess }]
+        );
+      }
     } catch (err: any) {
       Alert.alert('Grading Error', err.message);
     } finally {
@@ -177,8 +309,47 @@ export const GradingFormScreen: React.FC<GradingFormScreenProps> = ({
     }
   };
 
+  const formatCountdown = (secs: number) => {
+    const m = Math.floor(secs / 60);
+    const s = secs % 60;
+    return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+  };
+
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.scrollContent}>
+      {/* 5-Minute Post-Submission Window Banner */}
+      {existingRecord && (
+        <View
+          style={[
+            styles.editingWindowBanner,
+            canEditRecord ? styles.editingWindowActive : styles.editingWindowExpired,
+          ]}
+        >
+          <Ionicons
+            name={canEditRecord ? 'timer-outline' : 'lock-closed-outline'}
+            size={18}
+            color={canEditRecord ? colors.warning : colors.neutralGray}
+          />
+          <View style={styles.editingWindowMeta}>
+            <Text
+              style={[
+                styles.editingWindowTitle,
+                { color: canEditRecord ? colors.warning : colors.neutralHeadings },
+              ]}
+            >
+              {canEditRecord
+                ? `Editable Window: ${formatCountdown(remainingSeconds)} remaining`
+                : 'Inspection Finalized (Editing Window Expired)'}
+            </Text>
+            <Text style={styles.editingWindowSub}>
+              {canEditRecord
+                ? 'Field regulations permit updates within 5 minutes of initial submission.'
+                : 'Measurements are locked. Any further adjustments require administrative review.'}
+            </Text>
+          </View>
+        </View>
+      )}
+
       {/* Draft Restored Banner */}
       {draftRestored && (
         <View style={styles.draftRestoredBox}>
@@ -204,18 +375,64 @@ export const GradingFormScreen: React.FC<GradingFormScreenProps> = ({
           </View>
         </View>
         <Text style={styles.coopText}>
-          {org?.name || 'Cooperative'} · {lot.pickupDistrict}
+          {org?.name || 'Cooperative'} · {lot.pickupDistrict}, {lot.pickupSector}
         </Text>
       </View>
 
       {/* Calculated Grade Display */}
       <View style={styles.gradeBox}>
-        <Text style={styles.gradeBoxTitle}>{t.agent.calculatedGrade}:</Text>
+        <View>
+          <Text style={styles.gradeBoxTitle}>{t.agent.calculatedGrade}:</Text>
+          <Text style={styles.gradeBoxSubtitle}>Governed by backend threshold rules</Text>
+        </View>
         <StatusBadge status={calculatedGrade} />
       </View>
 
-      {/* Measurements with suffix */}
-      <Text style={styles.sectionTitle}>{t.agent.enterMeasurements}</Text>
+      {/* Structured Checkbox Inspection Checklist */}
+      <View style={styles.checklistSection}>
+        <View style={styles.checklistHeader}>
+          <Text style={styles.sectionTitle}>Physical Inspection Checklist</Text>
+          <Text style={styles.checklistProgress}>
+            {Object.values(checklist).filter(Boolean).length}/{CHECKLIST_ITEMS.length} verified
+          </Text>
+        </View>
+        <Text style={styles.sectionSubtitle}>
+          Mandatory criteria required by Cargo field inspection standard (FR-QA-02).
+        </Text>
+
+        {CHECKLIST_ITEMS.map(item => {
+          const checked = !!checklist[item.id];
+          return (
+            <TouchableOpacity
+              key={item.id}
+              style={[styles.checklistItem, checked && styles.checklistItemChecked]}
+              onPress={() => toggleChecklistItem(item.id)}
+              disabled={!canEditRecord}
+              activeOpacity={0.7}
+              accessibilityRole="checkbox"
+              accessibilityState={{ checked }}
+            >
+              <Ionicons
+                name={checked ? 'checkbox' : 'square-outline'}
+                size={22}
+                color={checked ? colors.primary : colors.neutralLight}
+              />
+              <View style={styles.checkTextWrap}>
+                <Text style={[styles.checkLabel, checked && styles.checkLabelChecked]}>
+                  {item.label}
+                </Text>
+                <Text style={styles.checkDesc}>{item.description}</Text>
+              </View>
+            </TouchableOpacity>
+          );
+        })}
+      </View>
+
+      {/* Laboratory & Physical Measurements */}
+      <Text style={styles.sectionTitle}>Quality Measurements</Text>
+      <Text style={styles.sectionSubtitle}>
+        Moisture, foreign matter, and defect levels dictate official Cargo grade.
+      </Text>
 
       <FormField
         label={t.agent.moisture}
@@ -224,7 +441,8 @@ export const GradingFormScreen: React.FC<GradingFormScreenProps> = ({
         keyboardType="numeric"
         placeholder="13.2"
         suffix="%"
-        helper="Grade A threshold: <= 13.5%"
+        helper="Grade A: <= 13.5% | Grade B: <= 14.5% | Grade C: > 14.5%"
+        editable={canEditRecord}
       />
 
       <FormField
@@ -234,7 +452,8 @@ export const GradingFormScreen: React.FC<GradingFormScreenProps> = ({
         keyboardType="numeric"
         placeholder="0.8"
         suffix="%"
-        helper="Grade A threshold: <= 1.0%"
+        helper="Grade A: <= 1.0% | Grade B: <= 2.0% | Grade C: > 2.0%"
+        editable={canEditRecord}
       />
 
       <FormField
@@ -244,60 +463,55 @@ export const GradingFormScreen: React.FC<GradingFormScreenProps> = ({
         keyboardType="numeric"
         placeholder="1.5"
         suffix="%"
-        helper="Grade A threshold: <= 2.0%"
+        helper="Grade A: <= 2.0% | Grade B: <= 4.0% | Grade C: > 4.0%"
+        editable={canEditRecord}
       />
 
-      {/* GPS Location */}
-      <View style={styles.gpsCard}>
-        <Ionicons name="location" size={20} color={colors.primary} />
-        <View style={styles.gpsTextWrap}>
-          <Text style={styles.gpsTitle}>{t.agent.gpsLocation}</Text>
-          <Text style={styles.gpsCoords}>
-            {gps ? `Lat: ${gps.lat.toFixed(4)}, Lng: ${gps.lng.toFixed(4)}` : 'Location not recorded'}
-          </Text>
-        </View>
-      </View>
-
+      {/* Inspector Notes */}
       <FormField
         label="Inspection Field Notes"
         value={notes}
         onChangeText={setNotes}
+        placeholder="Add physical observations or bag inspection notes..."
         multiline
         numberOfLines={3}
+        editable={canEditRecord}
       />
 
-      {/* Immutability Notice */}
-      <View style={styles.immutableNotice}>
-        <Ionicons name="information-circle" size={18} color="#0369A1" />
-        <Text style={styles.immutableNoticeText}>
-          Submitted grading records are immutable (FR-QA-05). Quality inspections do not fabricate administrative approval (BR-02).
+      {/* GPS Geo-Tag */}
+      <View style={styles.gpsRow}>
+        <Ionicons name="navigate-circle" size={18} color={colors.primary} />
+        <Text style={styles.gpsText}>
+          Location Verified: {gps?.lat.toFixed(4)}, {gps?.lng.toFixed(4)} (±5m)
         </Text>
       </View>
 
       {/* Action Buttons */}
-      <View style={styles.saveDraftRow}>
-        <Button
-          title={hasSavedDraft ? 'Update Draft' : t.agent.saveDraft}
-          onPress={() => handleSaveDraft(false)}
-          variant="secondary"
-          loading={savingDraft}
-          icon={<Ionicons name="save-outline" size={16} color={colors.primary} />}
-          style={styles.btnFull}
-        />
-      </View>
+      <View style={styles.actionContainer}>
+        {canEditRecord && (
+          <Button
+            title={existingRecord ? 'Update Inspection' : 'Submit Inspection'}
+            onPress={handleSubmit}
+            loading={loading}
+            style={styles.submitBtn}
+          />
+        )}
 
-      <View style={styles.buttonRow}>
+        {!existingRecord && canEditRecord && (
+          <Button
+            title={hasSavedDraft ? 'Update Draft' : t.agent.saveDraft}
+            onPress={() => handleSaveDraft(false)}
+            variant="outline"
+            loading={savingDraft}
+            style={styles.draftBtn}
+          />
+        )}
+
         <Button
-          title={t.common.cancel}
+          title={existingRecord ? 'Close' : t.common.cancel}
           onPress={handleCancel}
-          variant="secondary"
-          style={styles.btnHalf}
-        />
-        <Button
-          title={t.agent.submitGrading}
-          onPress={handleSubmit}
-          loading={loading}
-          style={styles.btnHalf}
+          variant="outline"
+          style={styles.cancelBtn}
         />
       </View>
     </ScrollView>
@@ -311,40 +525,69 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     padding: spacing.md,
-    paddingBottom: spacing.xxxl + 20,
+    paddingBottom: spacing.xxxl + 30,
+  },
+  editingWindowBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: spacing.sm + 4,
+    borderRadius: radii.md,
+    marginBottom: spacing.md,
+    borderWidth: 1,
+    gap: spacing.sm,
+  },
+  editingWindowActive: {
+    backgroundColor: '#FFFBEB',
+    borderColor: colors.warning,
+  },
+  editingWindowExpired: {
+    backgroundColor: colors.surfaceMint,
+    borderColor: colors.border,
+  },
+  editingWindowMeta: {
+    flex: 1,
+  },
+  editingWindowTitle: {
+    ...typography.body,
+    fontWeight: 'bold',
+    fontSize: 13,
+  },
+  editingWindowSub: {
+    ...typography.caption,
+    fontSize: 11,
+    color: colors.neutralGray,
+    marginTop: 1,
   },
   draftRestoredBox: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: colors.surfaceHighlighted,
-    borderWidth: 1,
-    borderColor: colors.successBorder,
+    backgroundColor: colors.surfaceMint,
     padding: spacing.sm,
     borderRadius: radii.md,
     marginBottom: spacing.md,
     gap: spacing.xs,
   },
   draftRestoredText: {
-    ...typography.caption,
-    fontSize: 12,
-    color: colors.successDark,
     flex: 1,
+    ...typography.caption,
+    color: colors.primary,
+    fontWeight: '500',
   },
   lotSummaryBox: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.white,
     padding: spacing.md,
     borderRadius: radii.md,
+    marginBottom: spacing.md,
     borderWidth: 1,
     borderColor: colors.border,
-    marginBottom: spacing.md,
   },
   summaryTopRow: {
     flexDirection: 'row',
     alignItems: 'center',
+    marginBottom: spacing.xs,
   },
   summaryTitleWrap: {
     marginLeft: spacing.sm,
-    flex: 1,
   },
   lotCrop: {
     ...typography.h3,
@@ -357,89 +600,113 @@ const styles = StyleSheet.create({
   },
   coopText: {
     ...typography.caption,
-    fontSize: 12,
-    fontWeight: '600',
-    color: colors.primary,
-    marginTop: spacing.xs,
+    color: colors.neutralLight,
+    marginTop: 2,
   },
   gradeBox: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.surfaceMint,
     padding: spacing.md,
     borderRadius: radii.md,
-    borderWidth: 1,
-    borderColor: colors.border,
     marginBottom: spacing.md,
+    borderWidth: 1,
+    borderColor: colors.primary + '25',
   },
   gradeBoxTitle: {
-    ...typography.bodyMedium,
-    fontSize: 14,
-    fontWeight: '700',
+    ...typography.body,
+    fontWeight: 'bold',
     color: colors.neutralHeadings,
   },
-  sectionTitle: {
+  gradeBoxSubtitle: {
     ...typography.caption,
-    fontSize: 12,
-    fontWeight: '700',
+    fontSize: 11,
     color: colors.neutralGray,
-    textTransform: 'uppercase',
-    marginBottom: spacing.sm,
   },
-  gpsCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: colors.surfaceHighlighted,
-    borderWidth: 1,
-    borderColor: colors.successBorder,
-    padding: spacing.sm + 2,
+  checklistSection: {
+    backgroundColor: colors.white,
+    padding: spacing.md,
     borderRadius: radii.md,
     marginBottom: spacing.md,
+    borderWidth: 1,
+    borderColor: colors.border,
   },
-  gpsTextWrap: {
-    marginLeft: spacing.sm,
+  checklistHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
   },
-  gpsTitle: {
+  checklistProgress: {
     ...typography.caption,
-    fontSize: 11,
-    fontWeight: '700',
-    color: colors.successDark,
+    color: colors.primary,
+    fontWeight: 'bold',
   },
-  gpsCoords: {
+  sectionTitle: {
+    ...typography.h3,
+    fontSize: 15,
+    color: colors.neutralHeadings,
+    marginBottom: 2,
+  },
+  sectionSubtitle: {
     ...typography.caption,
-    fontSize: 11,
-    color: colors.success,
-    marginTop: 1,
+    color: colors.neutralGray,
+    marginBottom: spacing.md,
   },
-  immutableNotice: {
+  checklistItem: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    backgroundColor: '#E0F2FE',
-    padding: spacing.sm + 2,
-    borderRadius: radii.md,
-    marginBottom: spacing.md,
-    gap: spacing.xs,
+    paddingVertical: spacing.sm,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.borderLight,
+    gap: spacing.sm,
   },
-  immutableNoticeText: {
+  checklistItemChecked: {
+    backgroundColor: '#F9FBF9',
+  },
+  checkTextWrap: {
+    flex: 1,
+  },
+  checkLabel: {
+    ...typography.body,
+    fontSize: 13,
+    color: colors.neutralHeadings,
+    fontWeight: '600',
+  },
+  checkLabelChecked: {
+    color: colors.primary,
+  },
+  checkDesc: {
     ...typography.caption,
     fontSize: 11,
-    color: '#0369A1',
-    flex: 1,
-    lineHeight: 16,
+    color: colors.neutralGray,
+    marginTop: 2,
   },
-  saveDraftRow: {
-    marginBottom: spacing.sm,
-  },
-  buttonRow: {
+  gpsRow: {
     flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    marginVertical: spacing.sm,
+    backgroundColor: colors.surfaceMint,
+    padding: spacing.sm,
+    borderRadius: radii.sm,
+  },
+  gpsText: {
+    ...typography.caption,
+    color: colors.primary,
+    fontWeight: '500',
+  },
+  actionContainer: {
+    marginTop: spacing.md,
     gap: spacing.sm,
-    marginTop: spacing.xs,
   },
-  btnFull: {
-    width: '100%',
+  submitBtn: {
+    marginBottom: spacing.xs,
   },
-  btnHalf: {
-    flex: 1,
+  draftBtn: {
+    marginBottom: spacing.xs,
+  },
+  cancelBtn: {
+    borderColor: colors.border,
   },
 });

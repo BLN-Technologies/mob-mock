@@ -7,64 +7,49 @@ import {
   KeyboardAvoidingView,
   Platform,
   TouchableOpacity,
+  TextInput,
+  ActivityIndicator,
   Modal,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, radii, shadows, typography, spacing } from '../../theme/tokens';
 import { useTranslation, Language } from '../../i18n';
-import { Button } from '../../components/ui/Button';
-import { FormField } from '../../components/forms/FormField';
-import { OtpModal } from './OtpModal';
-import { authService } from '../../services/mock/mockServices';
+import { authService, normalizeRwandanPhone, isValidEmail } from '../../services/mock/mockServices';
 import { User } from '../../domain/models';
-import { UserRole } from '../../domain/enums';
 
 interface RegisterScreenProps {
   onRegisterSuccess: (user: User) => void;
   onNavigateToLogin: () => void;
   onBackToRoleSelect?: () => void;
-  selectedRole?: UserRole.SUPPLIER | UserRole.BUYER;
+  onBackToWelcome?: () => void;
+  selectedRole?: any;
 }
-
-const RWANDA_DISTRICTS = [
-  'Nyagatare',
-  'Huye',
-  'Musanze',
-  'Bugesera',
-  'Kirehe',
-  'Rwamagana',
-  'Gasabo (Kigali)',
-  'Kicukiro (Kigali)',
-  'Nyarugenge (Kigali)',
-  'Rubavu',
-];
 
 export const RegisterScreen: React.FC<RegisterScreenProps> = ({
   onRegisterSuccess,
   onNavigateToLogin,
-  onBackToRoleSelect,
-  selectedRole = UserRole.SUPPLIER,
+  onBackToWelcome,
 }) => {
   const { t, language, setLanguage } = useTranslation();
 
-  // Form State
-  const [role, setRole] = useState<UserRole.SUPPLIER | UserRole.BUYER>(selectedRole);
+  // Contact method toggle
+  const [contactMethod, setContactMethod] = useState<'phone' | 'email'>('phone');
+
+  // Fields
   const [fullName, setFullName] = useState('');
   const [phone, setPhone] = useState('');
   const [email, setEmail] = useState('');
-  const [orgName, setOrgName] = useState('');
-  const [district, setDistrict] = useState('Nyagatare');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [agreedToTerms, setAgreedToTerms] = useState(false);
 
-  // Validation & UI State
+  // Status & Validation
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [serverError, setServerError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
-  const [showOtp, setShowOtp] = useState(false);
-  const [pendingUser, setPendingUser] = useState<User | null>(null);
   const [showTermsModal, setShowTermsModal] = useState(false);
   const [termsModalType, setTermsModalType] = useState<'terms' | 'privacy'>('terms');
 
@@ -80,20 +65,16 @@ export const RegisterScreen: React.FC<RegisterScreenProps> = ({
       errors.fullName = t.auth.errFullNameRequired;
     }
 
-    const cleanPhone = phone.trim().replace(/\s+/g, '');
-    const phoneValid =
-      cleanPhone.length >= 8 &&
-      (/^(\+?250)?(7[2389]\d{7})$/.test(cleanPhone) || /^\d{8,12}$/.test(cleanPhone));
-    if (!cleanPhone || !phoneValid) {
-      errors.phone = t.auth.errPhoneRequired;
-    }
-
-    if ((role === UserRole.SUPPLIER || role === UserRole.BUYER) && !orgName.trim()) {
-      errors.orgName = t.auth.errOrgRequired;
-    }
-
-    if (!district) {
-      errors.district = t.auth.errDistrictRequired;
+    if (contactMethod === 'phone') {
+      const clean = phone.trim().replace(/\s+/g, '');
+      const normalized = normalizeRwandanPhone(clean);
+      if (!clean || normalized.length < 10) {
+        errors.phone = t.auth.errPhoneRequired;
+      }
+    } else {
+      if (!email.trim() || !isValidEmail(email)) {
+        errors.email = t.auth.errEmailRequired;
+      }
     }
 
     if (!password || password.length < 6) {
@@ -113,30 +94,25 @@ export const RegisterScreen: React.FC<RegisterScreenProps> = ({
   };
 
   const handleRegister = async () => {
+    if (loading) return; // Prevent duplicate submissions
     setServerError(null);
+
     if (!validate()) {
       return;
     }
 
     setLoading(true);
     try {
-      const result = await authService.register({
+      const result = await authService.registerAccount({
         fullName: fullName.trim(),
-        phone: phone.trim(),
-        email: email.trim() || undefined,
+        phone: contactMethod === 'phone' ? phone.trim() : undefined,
+        email: contactMethod === 'email' ? email.trim() : undefined,
         password,
-        role,
-        organizationName: orgName.trim() || undefined,
-        district,
         preferredLanguage: language,
+        acceptedTerms: agreedToTerms,
       });
 
-      setPendingUser(result.user);
-      if (result.requiresOtp) {
-        setShowOtp(true);
-      } else {
-        onRegisterSuccess(result.user);
-      }
+      onRegisterSuccess(result.user);
     } catch (err: any) {
       setServerError(err.message || 'Registration failed. Please check your information.');
     } finally {
@@ -144,471 +120,304 @@ export const RegisterScreen: React.FC<RegisterScreenProps> = ({
     }
   };
 
-  const handleVerifyOtp = async (code: string) => {
-    try {
-      await authService.verifyOtp(code);
-      setShowOtp(false);
-      if (pendingUser) {
-        onRegisterSuccess(pendingUser);
-      }
-    } catch (err: any) {
-      setServerError(err.message);
-    }
-  };
-
   return (
     <SafeAreaView style={styles.safeArea} edges={['top', 'bottom', 'left', 'right']}>
       <KeyboardAvoidingView
+        style={{ flex: 1 }}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        style={styles.keyboardView}
       >
-        <ScrollView
-          contentContainerStyle={styles.scrollContent}
-          keyboardShouldPersistTaps="handled"
-          showsVerticalScrollIndicator={false}
-        >
-          <View style={styles.contentWrapper}>
-            {/* 1. Top Bar with Back Button and Language Pill */}
-            <View style={styles.topBar}>
-              <TouchableOpacity
-                style={styles.backToLoginBtn}
-                onPress={onBackToRoleSelect || onNavigateToLogin}
-                activeOpacity={0.8}
-                accessibilityRole="button"
-                accessibilityLabel="Go back"
-              >
-                <Ionicons name="arrow-back" size={16} color="#FFFFFF" />
-                <Text style={styles.backToLoginText}>
-                  {onBackToRoleSelect
-                    ? language === 'rw'
-                      ? 'Guhindura'
-                      : 'Role Selection'
-                    : t.auth.signInLink}
-                </Text>
-              </TouchableOpacity>
+        <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+          {/* Header */}
+          <View style={styles.topHeader}>
+            <TouchableOpacity
+              style={styles.backButton}
+              onPress={onNavigateToLogin}
+              accessibilityLabel="Back to sign in"
+              accessibilityRole="button"
+            >
+              <Ionicons name="arrow-back" size={20} color="#202822" />
+            </TouchableOpacity>
 
-              <TouchableOpacity
-                style={styles.langPill}
-                onPress={toggleLanguage}
-                activeOpacity={0.8}
-                accessibilityRole="button"
-                accessibilityLabel="Toggle Language"
-              >
-                <Ionicons name="globe-outline" size={15} color="#FFFFFF" />
-                <Text style={styles.langPillText}>
-                  {language === 'rw' ? 'English' : 'Ikinyarwanda'}
-                </Text>
-              </TouchableOpacity>
+            <TouchableOpacity style={styles.langPill} onPress={toggleLanguage}>
+              <Ionicons name="globe-outline" size={13} color="#174A35" />
+              <Text style={styles.langText}>
+                {language === 'rw' ? 'English' : 'Kinyarwanda'}
+              </Text>
+            </TouchableOpacity>
+          </View>
+
+          <View style={styles.titleSection}>
+            <Text style={styles.title}>{t.auth.createAccount}</Text>
+            <Text style={styles.subtitle}>
+              {language === 'rw'
+                ? 'Iyandikishe maze konti yawe yemerwe na Cargo mbere yo gukoresha umwanya w\'akazi.'
+                : 'Create your account. Cargo Operations will verify your details and authorize your access.'}
+            </Text>
+          </View>
+
+          {serverError && (
+            <View style={styles.errorBanner}>
+              <Ionicons name="alert-circle" size={18} color="#B42318" />
+              <Text style={styles.errorBannerText}>{serverError}</Text>
             </View>
+          )}
 
-            {/* 2. Brand Header */}
-            <View style={styles.brandContainer}>
-              <View style={styles.logoBadge}>
-                <Ionicons name="leaf" size={26} color="#FFFFFF" />
+          {/* Form */}
+          <View style={styles.formCard}>
+            {/* Full Name */}
+            <View style={styles.fieldGroup}>
+              <Text style={styles.fieldLabel}>
+                {t.auth.fullName} <Text style={styles.required}>*</Text>
+              </Text>
+              <View style={[styles.inputWrapper, fieldErrors.fullName && styles.inputWrapperError]}>
+                <Ionicons name="person-outline" size={18} color="#66716A" style={styles.inputIcon} />
+                <TextInput
+                  style={styles.textInput}
+                  value={fullName}
+                  onChangeText={setFullName}
+                  placeholder={language === 'rw' ? 'Urugero: Jean de Dieu Mugabo' : 'e.g. Jean de Dieu Mugabo'}
+                  placeholderTextColor="#94A3B8"
+                  autoCapitalize="words"
+                  accessibilityLabel={t.auth.fullName}
+                />
               </View>
-              <Text style={styles.appName}>{t.common.appName}</Text>
-              <Text style={styles.tagline}>{t.common.tagline}</Text>
+              {fieldErrors.fullName && <Text style={styles.fieldErrorText}>{fieldErrors.fullName}</Text>}
             </View>
 
-            {/* 3. Main Registration Form Card */}
-            <View style={styles.formCard}>
-              <Text style={styles.formTitle}>{t.auth.createAccount}</Text>
-              <Text style={styles.formSubtitle}>{t.auth.createAccountSubtitle}</Text>
-
-              {/* Server or Global Error */}
-              {serverError ? (
-                <View style={styles.errorBox}>
-                  <Ionicons name="alert-circle" size={18} color={colors.danger} />
-                  <Text style={styles.errorBoxText}>{serverError}</Text>
-                </View>
-              ) : null}
-
-              {/* Selected Role Banner (Pre-selected from role choice journey) */}
-              <View style={styles.selectedRoleBanner}>
-                <View
-                  style={[
-                    styles.selectedRoleIconWrap,
-                    {
-                      backgroundColor:
-                        role === UserRole.SUPPLIER ? '#DCFCE7' : '#DBEAFE',
-                    },
-                  ]}
+            {/* Contact Method Selector */}
+            <View style={styles.fieldGroup}>
+              <Text style={styles.fieldLabel}>
+                {language === 'rw' ? 'Uburyo bwo Kukubona' : 'Contact Method'} <Text style={styles.required}>*</Text>
+              </Text>
+              <View style={styles.methodSelector}>
+                <TouchableOpacity
+                  style={[styles.methodTab, contactMethod === 'phone' && styles.methodTabActive]}
+                  onPress={() => setContactMethod('phone')}
                 >
                   <Ionicons
-                    name={role === UserRole.SUPPLIER ? 'leaf' : 'business'}
-                    size={22}
-                    color={role === UserRole.SUPPLIER ? colors.primary : colors.infoDark}
+                    name="call-outline"
+                    size={16}
+                    color={contactMethod === 'phone' ? '#FFFFFF' : '#66716A'}
                   />
-                </View>
-
-                <View style={styles.selectedRoleTextWrap}>
-                  <Text style={styles.selectedRolePreTitle}>
-                    {t.auth.selectedRoleBanner}
+                  <Text style={[styles.methodTabText, contactMethod === 'phone' && styles.methodTabTextActive]}>
+                    {language === 'rw' ? 'Telefone' : 'Phone Number'}
                   </Text>
-                  <Text style={styles.selectedRoleMainTitle}>
-                    {role === UserRole.SUPPLIER
-                      ? t.auth.roleSupplierTitle
-                      : t.auth.roleBuyerTitle}
-                  </Text>
-                  <Text style={styles.selectedRoleSubDesc}>
-                    {role === UserRole.SUPPLIER
-                      ? t.auth.roleSupplierDesc
-                      : t.auth.roleBuyerDesc}
-                  </Text>
-                </View>
+                </TouchableOpacity>
 
-                {onBackToRoleSelect && (
-                  <TouchableOpacity
-                    style={styles.changeRoleBtn}
-                    onPress={onBackToRoleSelect}
-                    activeOpacity={0.7}
-                    accessibilityRole="button"
-                    accessibilityLabel={t.auth.changeRole}
-                  >
-                    <Ionicons name="swap-horizontal" size={14} color={colors.primary} />
-                    <Text style={styles.changeRoleText}>{t.auth.changeRole}</Text>
-                  </TouchableOpacity>
-                )}
-              </View>
-
-              {/* Personal Information Step */}
-              <View style={styles.sectionDividerRow}>
-                <View style={styles.sectionNumberBadge}>
-                  <Text style={styles.sectionNumberText}>1</Text>
-                </View>
-                <Text style={styles.sectionTitle}>
-                  {language === 'rw' ? 'Imyirondoro Yawe' : 'Personal Details'}
-                </Text>
-              </View>
-
-              <FormField
-                label={t.auth.fullName}
-                value={fullName}
-                onChangeText={text => {
-                  setFullName(text);
-                  setFieldErrors(prev => ({ ...prev, fullName: '' }));
-                }}
-                placeholder={t.auth.fullNamePlaceholder}
-                icon="person-outline"
-                error={fieldErrors.fullName}
-                autoCapitalize="words"
-              />
-
-              <FormField
-                label={t.auth.phoneLabel}
-                value={phone}
-                onChangeText={text => {
-                  setPhone(text);
-                  setFieldErrors(prev => ({ ...prev, phone: '' }));
-                }}
-                placeholder={t.auth.phonePlaceholder}
-                prefix="+250"
-                keyboardType="phone-pad"
-                error={fieldErrors.phone}
-              />
-
-              <FormField
-                label={t.auth.emailLabel}
-                value={email}
-                onChangeText={setEmail}
-                placeholder={t.auth.emailPlaceholder}
-                icon="mail-outline"
-                keyboardType="email-address"
-                autoCapitalize="none"
-              />
-
-              {/* 2. Role-Specific Business Information */}
-              <View style={styles.sectionDividerRow}>
-                <View style={styles.sectionNumberBadge}>
-                  <Text style={styles.sectionNumberText}>2</Text>
-                </View>
-                <Text style={styles.sectionTitle}>
-                  {role === UserRole.SUPPLIER
-                    ? language === 'rw'
-                      ? 'Amakuru ya Koperative'
-                      : 'Cooperative Information'
-                    : role === UserRole.BUYER
-                    ? language === 'rw'
-                      ? 'Amakuru y\'Ubucuruzi'
-                      : 'Business Information'
-                    : language === 'rw'
-                    ? 'Akarere k\'Umurimo'
-                    : 'Field Operations Area'}
-                </Text>
-              </View>
-
-              {(role === UserRole.SUPPLIER || role === UserRole.BUYER) && (
-                <FormField
-                  label={
-                    role === UserRole.SUPPLIER
-                      ? t.auth.cooperativeName
-                      : t.auth.buyerBusinessName
-                  }
-                  value={orgName}
-                  onChangeText={text => {
-                    setOrgName(text);
-                    setFieldErrors(prev => ({ ...prev, orgName: '' }));
-                  }}
-                  placeholder={
-                    role === UserRole.SUPPLIER
-                      ? t.auth.cooperativePlaceholder
-                      : t.auth.buyerBusinessPlaceholder
-                  }
-                  icon="business-outline"
-                  error={fieldErrors.orgName}
-                  autoCapitalize="words"
-                />
-              )}
-
-              {/* District Selector Chips */}
-              <View style={styles.districtWrap}>
-                <Text style={styles.inputLabel}>{t.auth.districtLabel}</Text>
-                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.districtScroll}>
-                  {RWANDA_DISTRICTS.map(d => {
-                    const isSelected = district === d;
-                    return (
-                      <TouchableOpacity
-                        key={d}
-                        style={[styles.districtChip, isSelected && styles.districtChipActive]}
-                        onPress={() => setDistrict(d)}
-                        activeOpacity={0.8}
-                      >
-                        <Ionicons
-                          name="location"
-                          size={12}
-                          color={isSelected ? '#FFFFFF' : colors.primary}
-                          style={styles.districtIcon}
-                        />
-                        <Text
-                          style={[
-                            styles.districtChipText,
-                            isSelected && styles.districtChipTextActive,
-                          ]}
-                        >
-                          {d}
-                        </Text>
-                      </TouchableOpacity>
-                    );
-                  })}
-                </ScrollView>
-              </View>
-
-              {/* 3. Security & Passwords */}
-              <View style={styles.sectionDividerRow}>
-                <View style={styles.sectionNumberBadge}>
-                  <Text style={styles.sectionNumberText}>3</Text>
-                </View>
-                <Text style={styles.sectionTitle}>
-                  {language === 'rw' ? 'Umutekano & Ijambobanga' : 'Security & Password'}
-                </Text>
-              </View>
-
-              <FormField
-                label={t.auth.passwordLabel}
-                value={password}
-                onChangeText={text => {
-                  setPassword(text);
-                  setFieldErrors(prev => ({ ...prev, password: '', confirmPassword: '' }));
-                }}
-                secureTextEntry
-                placeholder="••••••••"
-                icon="lock-closed-outline"
-                error={fieldErrors.password}
-                helper={t.auth.passwordHelper}
-              />
-
-              <FormField
-                label={t.auth.confirmPasswordLabel}
-                value={confirmPassword}
-                onChangeText={text => {
-                  setConfirmPassword(text);
-                  setFieldErrors(prev => ({ ...prev, confirmPassword: '' }));
-                }}
-                secureTextEntry
-                placeholder="••••••••"
-                icon="shield-checkmark-outline"
-                error={fieldErrors.confirmPassword}
-              />
-
-              {/* Real-time Password Match Feedback */}
-              {confirmPassword.length > 0 && (
-                <View style={styles.passwordMatchRow}>
+                <TouchableOpacity
+                  style={[styles.methodTab, contactMethod === 'email' && styles.methodTabActive]}
+                  onPress={() => setContactMethod('email')}
+                >
                   <Ionicons
-                    name={
-                      password === confirmPassword ? 'checkmark-circle' : 'close-circle'
-                    }
-                    size={14}
-                    color={password === confirmPassword ? colors.success : colors.danger}
+                    name="mail-outline"
+                    size={16}
+                    color={contactMethod === 'email' ? '#FFFFFF' : '#66716A'}
                   />
-                  <Text
-                    style={[
-                      styles.passwordMatchText,
-                      {
-                        color:
-                          password === confirmPassword ? colors.successDark : colors.danger,
-                      },
-                    ]}
-                  >
-                    {password === confirmPassword
-                      ? t.auth.passwordsMatch
-                      : t.auth.passwordsDoNotMatch}
+                  <Text style={[styles.methodTabText, contactMethod === 'email' && styles.methodTabTextActive]}>
+                    {language === 'rw' ? 'Imeli' : 'Email Address'}
                   </Text>
+                </TouchableOpacity>
+              </View>
+
+              {/* Phone Input */}
+              {contactMethod === 'phone' && (
+                <View style={[styles.inputWrapper, fieldErrors.phone && styles.inputWrapperError]}>
+                  <View style={styles.countryCodeBadge}>
+                    <Text style={styles.countryCodeText}>🇷🇼 +250</Text>
+                  </View>
+                  <TextInput
+                    style={styles.textInput}
+                    value={phone}
+                    onChangeText={setPhone}
+                    placeholder="788 123 456"
+                    placeholderTextColor="#94A3B8"
+                    keyboardType="phone-pad"
+                    accessibilityLabel="Phone Number"
+                  />
                 </View>
               )}
 
-              {/* 8. Terms of Service & Privacy Consent */}
+              {/* Email Input */}
+              {contactMethod === 'email' && (
+                <View style={[styles.inputWrapper, fieldErrors.email && styles.inputWrapperError]}>
+                  <Ionicons name="mail-outline" size={18} color="#66716A" style={styles.inputIcon} />
+                  <TextInput
+                    style={styles.textInput}
+                    value={email}
+                    onChangeText={setEmail}
+                    placeholder="name@organization.rw"
+                    placeholderTextColor="#94A3B8"
+                    keyboardType="email-address"
+                    autoCapitalize="none"
+                    accessibilityLabel="Email Address"
+                  />
+                </View>
+              )}
+
+              {fieldErrors.phone && <Text style={styles.fieldErrorText}>{fieldErrors.phone}</Text>}
+              {fieldErrors.email && <Text style={styles.fieldErrorText}>{fieldErrors.email}</Text>}
+            </View>
+
+            {/* Password */}
+            <View style={styles.fieldGroup}>
+              <Text style={styles.fieldLabel}>
+                {t.auth.password} <Text style={styles.required}>*</Text>
+              </Text>
+              <View style={[styles.inputWrapper, fieldErrors.password && styles.inputWrapperError]}>
+                <Ionicons name="lock-closed-outline" size={18} color="#66716A" style={styles.inputIcon} />
+                <TextInput
+                  style={styles.textInput}
+                  value={password}
+                  onChangeText={setPassword}
+                  placeholder="••••••••"
+                  placeholderTextColor="#94A3B8"
+                  secureTextEntry={!showPassword}
+                  accessibilityLabel={t.auth.password}
+                />
+                <TouchableOpacity
+                  onPress={() => setShowPassword(p => !p)}
+                  style={styles.eyeBtn}
+                  accessibilityLabel={showPassword ? 'Hide password' : 'Show password'}
+                >
+                  <Ionicons name={showPassword ? 'eye-off-outline' : 'eye-outline'} size={18} color="#66716A" />
+                </TouchableOpacity>
+              </View>
+              {fieldErrors.password && <Text style={styles.fieldErrorText}>{fieldErrors.password}</Text>}
+            </View>
+
+            {/* Confirm Password */}
+            <View style={styles.fieldGroup}>
+              <Text style={styles.fieldLabel}>
+                {t.auth.confirmPassword} <Text style={styles.required}>*</Text>
+              </Text>
+              <View style={[styles.inputWrapper, fieldErrors.confirmPassword && styles.inputWrapperError]}>
+                <Ionicons name="lock-closed-outline" size={18} color="#66716A" style={styles.inputIcon} />
+                <TextInput
+                  style={styles.textInput}
+                  value={confirmPassword}
+                  onChangeText={setConfirmPassword}
+                  placeholder="••••••••"
+                  placeholderTextColor="#94A3B8"
+                  secureTextEntry={!showConfirmPassword}
+                  accessibilityLabel={t.auth.confirmPassword}
+                />
+                <TouchableOpacity
+                  onPress={() => setShowConfirmPassword(p => !p)}
+                  style={styles.eyeBtn}
+                  accessibilityLabel={showConfirmPassword ? 'Hide password' : 'Show password'}
+                >
+                  <Ionicons name={showConfirmPassword ? 'eye-off-outline' : 'eye-outline'} size={18} color="#66716A" />
+                </TouchableOpacity>
+              </View>
+              {fieldErrors.confirmPassword && (
+                <Text style={styles.fieldErrorText}>{fieldErrors.confirmPassword}</Text>
+              )}
+            </View>
+
+            {/* Password Requirement notice */}
+            <View style={styles.requirementBox}>
+              <Ionicons
+                name={password.length >= 6 ? 'checkmark-circle' : 'information-circle-outline'}
+                size={14}
+                color={password.length >= 6 ? '#174A35' : '#66716A'}
+              />
+              <Text style={[styles.requirementText, password.length >= 6 && { color: '#174A35' }]}>
+                {language === 'rw' ? 'Byibura inyuguti cyangwa imibare 6' : 'Must contain at least 6 characters'}
+              </Text>
+            </View>
+
+            {/* Terms and Privacy Checkbox */}
+            <View style={styles.termsRow}>
               <TouchableOpacity
-                style={styles.termsConsentRow}
-                onPress={() => setAgreedToTerms(!agreedToTerms)}
-                activeOpacity={0.8}
+                style={[styles.checkbox, agreedToTerms && styles.checkboxActive]}
+                onPress={() => setAgreedToTerms(a => !a)}
                 accessibilityRole="checkbox"
                 accessibilityState={{ checked: agreedToTerms }}
               >
-                <View
-                  style={[
-                    styles.checkbox,
-                    agreedToTerms && styles.checkboxActive,
-                    fieldErrors.terms && styles.checkboxError,
-                  ]}
-                >
-                  {agreedToTerms && (
-                    <Ionicons name="checkmark" size={14} color="#FFFFFF" />
-                  )}
-                </View>
-
-                <View style={styles.termsTextWrap}>
-                  <Text style={styles.termsMainText}>
-                    {language === 'rw'
-                      ? 'Ndemera amategeko n\'amabwiriza bya Cargo n\'umutekano w\'amakuru.'
-                      : 'I agree to Cargo\'s '}{' '}
-                    <Text
-                      style={styles.termsLinkText}
-                      onPress={() => {
-                        setTermsModalType('terms');
-                        setShowTermsModal(true);
-                      }}
-                    >
-                      {t.auth.termsOfService}
-                    </Text>
-                    {language === 'rw' ? ' na ' : ' and '}
-                    <Text
-                      style={styles.termsLinkText}
-                      onPress={() => {
-                        setTermsModalType('privacy');
-                        setShowTermsModal(true);
-                      }}
-                    >
-                      {t.auth.privacyPolicy}
-                    </Text>
-                    .
-                  </Text>
-                </View>
+                {agreedToTerms && <Ionicons name="checkmark" size={14} color="#FFFFFF" />}
               </TouchableOpacity>
-
-              {fieldErrors.terms ? (
-                <Text style={styles.termsErrorText}>{fieldErrors.terms}</Text>
-              ) : null}
-
-              {/* 9. Primary Action Button */}
-              <Button
-                title={loading ? t.auth.creatingAccount : t.auth.createAccountAction}
-                onPress={handleRegister}
-                loading={loading}
-                size="large"
-                style={styles.submitBtn}
-                fullWidth
-              />
-
-              {/* 10. Direct Sign-in Link */}
-              <View style={styles.bottomSignInRow}>
-                <Text style={styles.bottomSignInText}>{t.auth.alreadyHaveAccount} </Text>
-                <TouchableOpacity
-                  onPress={onNavigateToLogin}
-                  activeOpacity={0.7}
-                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                >
-                  <Text style={styles.bottomSignInLink}>{t.auth.signInLink}</Text>
-                </TouchableOpacity>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.termsLabel}>
+                  {language === 'rw' ? 'Nemeye ' : 'I agree to Cargo '}
+                  <Text
+                    style={styles.termsLink}
+                    onPress={() => {
+                      setTermsModalType('terms');
+                      setShowTermsModal(true);
+                    }}
+                  >
+                    {language === 'rw' ? 'Amategeko n\'Amabwiriza' : 'Terms & Conditions'}
+                  </Text>
+                  {language === 'rw' ? ' na ' : ' and '}
+                  <Text
+                    style={styles.termsLink}
+                    onPress={() => {
+                      setTermsModalType('privacy');
+                      setShowTermsModal(true);
+                    }}
+                  >
+                    {language === 'rw' ? 'Politiki y\'Umutekano w\'Amakuru' : 'Privacy Policy'}
+                  </Text>
+                  .
+                </Text>
               </View>
+            </View>
+            {fieldErrors.terms && <Text style={styles.fieldErrorText}>{fieldErrors.terms}</Text>}
+
+            {/* Submit Button */}
+            <TouchableOpacity
+              style={[styles.submitButton, loading && styles.buttonDisabled]}
+              onPress={handleRegister}
+              disabled={loading}
+              activeOpacity={0.85}
+              accessibilityRole="button"
+            >
+              {loading ? (
+                <ActivityIndicator size="small" color="#FFFFFF" />
+              ) : (
+                <>
+                  <Text style={styles.submitButtonText}>{t.auth.createAccount}</Text>
+                  <Ionicons name="arrow-forward" size={18} color="#FFFFFF" />
+                </>
+              )}
+            </TouchableOpacity>
+
+            {/* Sign in prompt */}
+            <View style={styles.signInRow}>
+              <Text style={styles.signInPrompt}>{t.auth.alreadyHaveAccount} </Text>
+              <TouchableOpacity onPress={onNavigateToLogin}>
+                <Text style={styles.signInLinkText}>{t.auth.signInLink}</Text>
+              </TouchableOpacity>
             </View>
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
 
-      {/* 11. Terms & Privacy Policy Modal */}
-      <Modal
-        visible={showTermsModal}
-        transparent
-        animationType="slide"
-        onRequestClose={() => setShowTermsModal(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={styles.termsModalCard}>
+      {/* Terms Modal */}
+      <Modal visible={showTermsModal} animationType="slide" transparent>
+        <SafeAreaView style={styles.modalOverlay}>
+          <View style={styles.modalCard}>
             <View style={styles.modalHeader}>
-              <View style={styles.modalTitleRow}>
-                <Ionicons
-                  name={termsModalType === 'terms' ? 'document-text' : 'shield-checkmark'}
-                  size={20}
-                  color={colors.primary}
-                />
-                <Text style={styles.modalTitle}>
-                  {termsModalType === 'terms' ? t.auth.termsOfService : t.auth.privacyPolicy}
-                </Text>
-              </View>
-              <TouchableOpacity
-                onPress={() => setShowTermsModal(false)}
-                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-              >
-                <Ionicons name="close" size={22} color={colors.neutralGray} />
+              <Text style={styles.modalTitle}>
+                {termsModalType === 'terms' ? 'Terms & Conditions' : 'Privacy Policy'}
+              </Text>
+              <TouchableOpacity onPress={() => setShowTermsModal(false)}>
+                <Ionicons name="close" size={22} color="#202822" />
               </TouchableOpacity>
             </View>
-
-            <ScrollView style={styles.modalBody}>
-              {termsModalType === 'terms' ? (
-                <View style={styles.termsContent}>
-                  <Text style={styles.policyHeading}>1. Platform Rules & Business Standards</Text>
-                  <Text style={styles.policyBody}>
-                    Cargo operates a verified agricultural trading network across Rwanda. Suppliers confirm harvested produce under BR-01. Buyers purchase inspected lots with Cargo escrow settlement under BR-03.
-                  </Text>
-                  <Text style={styles.policyHeading}>2. Quality & Inspections</Text>
-                  <Text style={styles.policyBody}>
-                    All produce lots undergo moisture, defect, and foreign-matter physical verification by licensed field agents before buyer catalog visibility (BR-02).
-                  </Text>
-                  <Text style={styles.policyHeading}>3. Trade Settlement & Delivery</Text>
-                  <Text style={styles.policyBody}>
-                    Payment is secured upon order confirmation and released to suppliers following verified delivery receipts.
-                  </Text>
-                </View>
-              ) : (
-                <View style={styles.termsContent}>
-                  <Text style={styles.policyHeading}>1. Farmer Privacy Assurance (BR-05)</Text>
-                  <Text style={styles.policyBody}>
-                    Individual farmer coordinates and personal contacts remain confidential. Trades are coordinated through verified cooperatives and Cargo aggregation hubs.
-                  </Text>
-                  <Text style={styles.policyHeading}>2. Data Security</Text>
-                  <Text style={styles.policyBody}>
-                    Your account phone number and personal details are encrypted and utilized strictly for commercial order coordination and two-factor SMS security.
-                  </Text>
-                </View>
-              )}
+            <ScrollView style={styles.modalScroll}>
+              <Text style={styles.modalBody}>
+                {termsModalType === 'terms'
+                  ? `Cargo Mobile V1 Platform Terms of Service\n\n1. Agricultural Stock & Warehousing:\nAll stock declarations are subject to certified agronomist inspection before buyer availability (BR-01, BR-02).\n\n2. Escrow & Settlement Integrity:\nPayments are placed into trusted escrow and disbursements strictly conserved according to fee schedules (BR-03, BR-04).\n\n3. Approval-Based Governance:\nCargo Operations oversees role provisioning to ensure market trust and food security compliance.`
+                  : `Cargo Rwanda Privacy Commitment (BR-05)\n\n1. Farmer Privacy:\nPrivate farm coordinates and personal phone numbers of individual cooperative members are never exposed to commercial buyers.\n\n2. Secure Verification:\nContact data is solely used for authentication and logistics dispatch.`}
+              </Text>
             </ScrollView>
-
-            <Button
-              title={t.common.confirm}
-              onPress={() => setShowTermsModal(false)}
-              fullWidth
-              style={styles.modalCloseBtn}
-            />
+            <TouchableOpacity style={styles.modalCloseBtn} onPress={() => setShowTermsModal(false)}>
+              <Text style={styles.modalCloseText}>Close</Text>
+            </TouchableOpacity>
           </View>
-        </View>
+        </SafeAreaView>
       </Modal>
-
-      {/* 12. Two-Factor Verification Modal */}
-      <OtpModal
-        visible={showOtp}
-        onVerify={handleVerifyOtp}
-        onCancel={() => setShowOtp(false)}
-      />
     </SafeAreaView>
   );
 };
@@ -616,389 +425,280 @@ export const RegisterScreen: React.FC<RegisterScreenProps> = ({
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: colors.primaryDark,
-  },
-  keyboardView: {
-    flex: 1,
+    backgroundColor: '#F7F8F5',
   },
   scrollContent: {
+    padding: 20,
     flexGrow: 1,
-    paddingHorizontal: spacing.md,
-    paddingTop: Platform.OS === 'android' ? spacing.md : spacing.sm,
-    paddingBottom: spacing.xxxl,
-    alignItems: 'center',
   },
-  contentWrapper: {
-    width: '100%',
-    maxWidth: 460,
-  },
-  topBar: {
+  topHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: spacing.md,
+    marginBottom: 16,
   },
-  backToLoginBtn: {
-    flexDirection: 'row',
+  backButton: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: '#FFFFFF',
     alignItems: 'center',
-    gap: 4,
-    backgroundColor: 'rgba(255, 255, 255, 0.15)',
-    paddingVertical: 6,
-    paddingHorizontal: 12,
-    borderRadius: radii.full,
-  },
-  backToLoginText: {
-    ...typography.caption,
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#FFFFFF',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: '#DCE4DD',
   },
   langPill: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    backgroundColor: 'rgba(255, 255, 255, 0.15)',
+    gap: 5,
+    backgroundColor: '#EAF2EC',
     paddingVertical: 6,
     paddingHorizontal: 12,
-    borderRadius: radii.full,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: '#DCE4DD',
   },
-  langPillText: {
-    ...typography.caption,
+  langText: {
     fontSize: 12,
-    fontWeight: '700',
-    color: '#FFFFFF',
+    fontWeight: '600',
+    color: '#174A35',
   },
-  brandContainer: {
-    alignItems: 'center',
-    marginBottom: spacing.lg,
+  titleSection: {
+    marginBottom: 20,
   },
-  logoBadge: {
-    width: 52,
-    height: 52,
-    borderRadius: 26,
-    backgroundColor: colors.primary,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: spacing.xs,
-    ...shadows.md,
-  },
-  appName: {
-    ...typography.h1,
-    fontSize: 26,
-    color: '#FFFFFF',
+  title: {
+    fontSize: 24,
     fontWeight: '800',
-    letterSpacing: -0.5,
+    color: '#202822',
+    letterSpacing: -0.3,
   },
-  tagline: {
-    ...typography.caption,
-    fontSize: 12,
-    color: '#DCFCE7',
-    marginTop: 2,
-    textAlign: 'center',
+  subtitle: {
+    fontSize: 13,
+    color: '#66716A',
+    marginTop: 6,
+    lineHeight: 18,
+  },
+  errorBanner: {
+    backgroundColor: '#FEE2E2',
+    borderColor: '#FCA5A5',
+    borderWidth: 1,
+    borderRadius: 10,
+    padding: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 16,
+  },
+  errorBannerText: {
+    fontSize: 13,
+    color: '#B42318',
+    flex: 1,
   },
   formCard: {
     backgroundColor: '#FFFFFF',
-    borderRadius: radii.xl,
-    padding: spacing.xl,
+    borderRadius: 16,
+    padding: 20,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.2)',
-    ...shadows.lg,
+    borderColor: '#DCE4DD',
+    ...shadows.sm,
+    gap: 16,
   },
-  formTitle: {
-    ...typography.h2,
-    fontSize: 20,
-    color: colors.neutralHeadings,
+  fieldGroup: {
+    gap: 6,
   },
-  formSubtitle: {
-    ...typography.caption,
-    fontSize: 12,
-    color: colors.neutralGray,
-    marginTop: 3,
-    marginBottom: spacing.md,
-    lineHeight: 17,
-  },
-  errorBox: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    backgroundColor: '#FEF2F2',
-    borderWidth: 1,
-    borderColor: colors.dangerBorder,
-    borderRadius: radii.md,
-    padding: spacing.md,
-    marginBottom: spacing.md,
-  },
-  errorBoxText: {
-    ...typography.caption,
-    fontSize: 12,
-    color: colors.danger,
-    flex: 1,
-    lineHeight: 16,
-  },
-  sectionDividerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs + 2,
-    marginTop: spacing.md,
-    marginBottom: spacing.sm,
-    paddingBottom: spacing.xs,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.borderLight,
-  },
-  sectionNumberBadge: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    backgroundColor: colors.primaryLight,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  sectionNumberText: {
-    fontSize: 11,
-    fontWeight: '800',
-    color: colors.primary,
-  },
-  sectionTitle: {
-    ...typography.caption,
-    fontSize: 12,
-    fontWeight: '800',
-    color: colors.neutralHeadings,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-  },
-  selectedRoleBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#F8FAFC',
-    borderRadius: radii.lg,
-    padding: spacing.md,
-    borderWidth: 1.5,
-    borderColor: colors.border,
-    marginBottom: spacing.xs,
-    gap: spacing.sm,
-  },
-  selectedRoleIconWrap: {
-    width: 44,
-    height: 44,
-    borderRadius: radii.md,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  selectedRoleTextWrap: {
-    flex: 1,
-  },
-  selectedRolePreTitle: {
-    ...typography.caption,
-    fontSize: 10,
-    fontWeight: '700',
-    color: colors.neutralGray,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-  },
-  selectedRoleMainTitle: {
-    ...typography.bodyMedium,
-    fontSize: 14,
-    fontWeight: '800',
-    color: colors.neutralHeadings,
-  },
-  selectedRoleSubDesc: {
-    ...typography.caption,
-    fontSize: 11,
-    color: colors.neutralGray,
-    marginTop: 1,
-    lineHeight: 14,
-  },
-  changeRoleBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: colors.border,
-    paddingVertical: 5,
-    paddingHorizontal: 10,
-    borderRadius: radii.md,
-  },
-  changeRoleText: {
-    ...typography.caption,
-    fontSize: 11,
-    fontWeight: '700',
-    color: colors.primary,
-  },
-  districtWrap: {
-    marginBottom: spacing.md,
-  },
-  inputLabel: {
-    ...typography.bodyMedium,
+  fieldLabel: {
     fontSize: 13,
     fontWeight: '600',
-    color: colors.neutralHeadings,
-    marginBottom: spacing.xs,
+    color: '#202822',
   },
-  districtScroll: {
-    flexDirection: 'row',
+  required: {
+    color: '#B42318',
   },
-  districtChip: {
+  inputWrapper: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: colors.surfaceSubtle,
+    backgroundColor: '#F7F8F5',
     borderWidth: 1,
-    borderColor: colors.border,
-    paddingVertical: 6,
+    borderColor: '#DCE4DD',
+    borderRadius: 10,
     paddingHorizontal: 12,
-    borderRadius: radii.full,
-    marginRight: spacing.xs + 2,
-    gap: 4,
   },
-  districtChipActive: {
-    backgroundColor: colors.primary,
-    borderColor: colors.primary,
+  inputWrapperError: {
+    borderColor: '#B42318',
+    backgroundColor: '#FEF2F2',
   },
-  districtIcon: {
-    marginRight: 2,
+  inputIcon: {
+    marginRight: 8,
   },
-  districtChipText: {
-    ...typography.caption,
-    fontSize: 12,
+  textInput: {
+    flex: 1,
+    paddingVertical: 12,
+    fontSize: 14,
+    color: '#202822',
+  },
+  countryCodeBadge: {
+    marginRight: 8,
+    paddingRight: 8,
+    borderRightWidth: 1,
+    borderRightColor: '#DCE4DD',
+  },
+  countryCodeText: {
+    fontSize: 13,
     fontWeight: '600',
-    color: colors.neutralHeadings,
+    color: '#202822',
   },
-  districtChipTextActive: {
-    color: '#FFFFFF',
-    fontWeight: '700',
+  eyeBtn: {
+    padding: 6,
   },
-  passwordMatchRow: {
+  fieldErrorText: {
+    fontSize: 12,
+    color: '#B42318',
+    marginTop: 2,
+  },
+  methodSelector: {
+    flexDirection: 'row',
+    backgroundColor: '#F7F8F5',
+    borderRadius: 10,
+    padding: 3,
+    gap: 4,
+    marginBottom: 8,
+    borderWidth: 1,
+    borderColor: '#DCE4DD',
+  },
+  methodTab: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
-    marginTop: -spacing.xs,
-    marginBottom: spacing.md,
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 8,
+    borderRadius: 8,
   },
-  passwordMatchText: {
-    ...typography.caption,
-    fontSize: 11,
+  methodTabActive: {
+    backgroundColor: '#174A35',
+  },
+  methodTabText: {
+    fontSize: 13,
     fontWeight: '600',
+    color: '#66716A',
   },
-  termsConsentRow: {
+  methodTabTextActive: {
+    color: '#FFFFFF',
+  },
+  requirementBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: -4,
+  },
+  requirementText: {
+    fontSize: 12,
+    color: '#66716A',
+  },
+  termsRow: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    marginTop: spacing.xs,
-    marginBottom: spacing.sm,
-    gap: spacing.sm,
+    gap: 10,
+    marginTop: 4,
   },
   checkbox: {
     width: 20,
     height: 20,
-    borderRadius: 4,
+    borderRadius: 5,
     borderWidth: 1.5,
-    borderColor: colors.neutralGray,
+    borderColor: '#66716A',
     alignItems: 'center',
     justifyContent: 'center',
     marginTop: 2,
-    backgroundColor: '#FFFFFF',
   },
   checkboxActive: {
-    backgroundColor: colors.primary,
-    borderColor: colors.primary,
+    backgroundColor: '#174A35',
+    borderColor: '#174A35',
   },
-  checkboxError: {
-    borderColor: colors.danger,
+  termsLabel: {
+    fontSize: 12,
+    color: '#66716A',
+    lineHeight: 18,
   },
-  termsTextWrap: {
-    flex: 1,
-  },
-  termsMainText: {
-    ...typography.caption,
-    fontSize: 11,
-    color: colors.neutralBody,
-    lineHeight: 16,
-  },
-  termsLinkText: {
+  termsLink: {
+    color: '#174A35',
     fontWeight: '700',
-    color: colors.primary,
     textDecorationLine: 'underline',
   },
-  termsErrorText: {
-    ...typography.caption,
-    fontSize: 11,
-    color: colors.danger,
-    marginBottom: spacing.sm,
+  submitButton: {
+    backgroundColor: '#174A35',
+    borderRadius: 12,
+    paddingVertical: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    marginTop: 8,
   },
-  submitBtn: {
-    marginTop: spacing.sm,
+  buttonDisabled: {
+    opacity: 0.65,
   },
-  bottomSignInRow: {
+  submitButtonText: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#FFFFFF',
+  },
+  signInRow: {
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
-    marginTop: spacing.lg,
-    paddingTop: spacing.md,
-    borderTopWidth: 1,
-    borderTopColor: colors.borderLight,
+    marginTop: 4,
   },
-  bottomSignInText: {
-    ...typography.caption,
+  signInPrompt: {
     fontSize: 13,
-    color: colors.neutralGray,
+    color: '#66716A',
   },
-  bottomSignInLink: {
-    ...typography.caption,
+  signInLinkText: {
     fontSize: 13,
-    fontWeight: '800',
-    color: colors.primary,
+    fontWeight: '700',
+    color: '#174A35',
   },
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(15, 23, 42, 0.6)',
+    backgroundColor: 'rgba(0,0,0,0.5)',
     justifyContent: 'flex-end',
   },
-  termsModalCard: {
+  modalCard: {
     backgroundColor: '#FFFFFF',
-    borderTopLeftRadius: radii.xl,
-    borderTopRightRadius: radii.xl,
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    padding: 20,
     maxHeight: '80%',
-    padding: spacing.lg,
-    ...shadows.lg,
   },
   modalHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: spacing.md,
-    paddingBottom: spacing.sm,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.borderLight,
-  },
-  modalTitleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs + 2,
+    marginBottom: 16,
   },
   modalTitle: {
-    ...typography.h3,
-    fontSize: 17,
-    color: colors.neutralHeadings,
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#202822',
+  },
+  modalScroll: {
+    marginVertical: 10,
   },
   modalBody: {
-    marginBottom: spacing.md,
-  },
-  termsContent: {
-    gap: spacing.sm,
-  },
-  policyHeading: {
-    ...typography.bodyMedium,
     fontSize: 13,
-    fontWeight: '700',
-    color: colors.neutralHeadings,
-    marginTop: spacing.xs,
-  },
-  policyBody: {
-    ...typography.caption,
-    fontSize: 12,
-    color: colors.neutralBody,
-    lineHeight: 18,
+    color: '#334155',
+    lineHeight: 20,
   },
   modalCloseBtn: {
-    marginTop: spacing.xs,
+    backgroundColor: '#174A35',
+    paddingVertical: 12,
+    borderRadius: 10,
+    alignItems: 'center',
+    marginTop: 10,
+  },
+  modalCloseText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#FFFFFF',
   },
 });
