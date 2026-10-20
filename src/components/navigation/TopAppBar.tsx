@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, TouchableOpacity, Image } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, radii, shadows, typography, spacing } from '../../theme/tokens';
 import { useTranslation } from '../../i18n';
+import { useTheme } from '../../theme/ThemeContext';
 import { User } from '../../domain/models';
 import { UserRole } from '../../domain/enums';
 

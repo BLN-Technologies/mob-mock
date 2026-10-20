@@ -164,7 +164,7 @@ export const BuyerHomeScreen: React.FC<BuyerHomeScreenProps> = ({
           </View>
           <View style={[styles.highlightDivider, { backgroundColor: tc.borderLight }]} />
           <View style={styles.highlightItem}>
-            <Ionicons name="flash" size={18} color={tc.accentGold} />
+            <Ionicons name="flash" size={18} color={tc.brandGold} />
             <Text style={[styles.highlightText, { color: tc.neutralHeadings }]}>
               {language === 'rw' ? 'Igeza Ryihuse' : 'Fast Dispatch'}
             </Text>
@@ -466,7 +466,7 @@ const styles = StyleSheet.create({
     fontWeight: '800',
   },
   subGreeting: {
-    ...typography.bodySmall,
+    ...typography.small,
     fontSize: 13,
     marginTop: 2,
     lineHeight: 18,
@@ -537,7 +537,7 @@ const styles = StyleSheet.create({
     borderRadius: radii.lg,
     borderWidth: 1,
     overflow: 'hidden',
-    ...shadows.card,
+    ...shadows.md,
   },
   cardImageContainer: {
     width: '100%',

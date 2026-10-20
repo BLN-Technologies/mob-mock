@@ -9,7 +9,7 @@ function ThemedApp() {
   const { isDark, colors } = useTheme();
   return (
     <>
-      <StatusBar style={isDark ? 'light' : 'dark'} backgroundColor={colors.surface} />
+      <StatusBar style={isDark ? 'light' : 'dark'} />
       <RootNavigator />
     </>
   );
