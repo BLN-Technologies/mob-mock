@@ -90,25 +90,29 @@ export const RootNavigator: React.FC = () => {
   const createSwipeResponder = (role: UserRole | string) => {
     return PanResponder.create({
       onStartShouldSetPanResponder: () => false,
+      onStartShouldSetPanResponderCapture: () => false,
       onMoveShouldSetPanResponder: (_, gestureState) => {
-        return Math.abs(gestureState.dx) > 40 && Math.abs(gestureState.dy) < 25;
+        return Math.abs(gestureState.dx) > 30 && Math.abs(gestureState.dy) < 20;
+      },
+      onMoveShouldSetPanResponderCapture: (_, gestureState) => {
+        return Math.abs(gestureState.dx) > 30 && Math.abs(gestureState.dy) < 15;
       },
       onPanResponderRelease: (_, gestureState) => {
         const tabs = getRoleTabs(role);
         const currentIndex = tabs.indexOf(activeTabRef.current);
         if (currentIndex === -1) return;
 
-        if (gestureState.dx < -50 && Math.abs(gestureState.dy) < 60) {
+        if (gestureState.dx < -35 && Math.abs(gestureState.dy) < 60) {
           if (currentIndex < tabs.length - 1) {
             setActiveTab(tabs[currentIndex + 1]);
           }
-        } else if (gestureState.dx > 50 && Math.abs(gestureState.dy) < 60) {
+        } else if (gestureState.dx > 35 && Math.abs(gestureState.dy) < 60) {
           if (currentIndex > 0) {
             setActiveTab(tabs[currentIndex - 1]);
           }
         }
       },
-      onPanResponderTerminate: () => {},
+      onPanResponderTerminationRequest: () => true,
     });
   };
 
@@ -329,7 +333,7 @@ export const RootNavigator: React.FC = () => {
       case 'lots':
         return t.tabs.lots;
       case 'catalogue':
-        return language === 'rw' ? 'Shakisha Umusaruro' : 'For You (Discover)';
+        return language === 'rw' ? 'Vumbura Umusaruro' : 'Explore Produce';
       case 'orders':
         return t.tabs.orders;
       case 'tasks':
@@ -416,6 +420,7 @@ export const RootNavigator: React.FC = () => {
               paddingBottom: tabBottomPadding,
             },
           ]}
+          {...supplierSwipeResponder.panHandlers}
         >
           <TouchableOpacity
             style={[styles.tabItem, activeTab === 'home' && styles.tabItemActive]}
@@ -579,6 +584,7 @@ export const RootNavigator: React.FC = () => {
               paddingBottom: tabBottomPadding,
             },
           ]}
+          {...agentSwipeResponder.panHandlers}
         >
           <TouchableOpacity
             style={[styles.tabItem, activeTab === 'home' && styles.tabItemActive]}
@@ -773,7 +779,7 @@ export const RootNavigator: React.FC = () => {
           )}
         </View>
 
-        {/* Buyer Bottom Tab Bar: Home · For You (Discover) · Orders · Profile */}
+        {/* Buyer Bottom Tab Bar: Home · Explore · Orders · Profile */}
         <View
           style={[
             styles.tabBar,
@@ -784,6 +790,7 @@ export const RootNavigator: React.FC = () => {
               paddingBottom: tabBottomPadding,
             },
           ]}
+          {...buyerSwipeResponder.panHandlers}
         >
           <TouchableOpacity
             style={[styles.tabItem, activeTab === 'home' && styles.tabItemActive]}
@@ -815,7 +822,7 @@ export const RootNavigator: React.FC = () => {
             accessibilityRole="tab"
           >
             <Ionicons
-              name={activeTab === 'catalogue' ? 'sparkles' : 'sparkles-outline'}
+              name={activeTab === 'catalogue' ? 'compass' : 'compass-outline'}
               size={20}
               color={activeTab === 'catalogue' ? tc.primary : tc.neutralGray}
             />
@@ -827,7 +834,7 @@ export const RootNavigator: React.FC = () => {
               ]}
               numberOfLines={1}
             >
-              {language === 'rw' ? 'Shakisha' : 'For You'}
+              {language === 'rw' ? 'Vumbura' : 'Explore'}
             </Text>
           </TouchableOpacity>
 

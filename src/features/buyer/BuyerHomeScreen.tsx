@@ -84,20 +84,20 @@ export const BuyerHomeScreen: React.FC<BuyerHomeScreenProps> = ({
       return {
         bg: '#EAF2EC',
         text: '#174A35',
-        label: 'Grade A',
+        label: language === 'rw' ? 'Icyiciro A' : 'Grade A',
       };
     }
     if (grade === QualityGrade.GRADE_B) {
       return {
         bg: '#FEF3C7',
         text: '#A96812',
-        label: 'Grade B',
+        label: language === 'rw' ? 'Icyiciro B' : 'Grade B',
       };
     }
     return {
       bg: '#F1F5F9',
       text: '#64748B',
-      label: 'Grade C',
+      label: language === 'rw' ? 'Icyiciro C' : 'Grade C',
     };
   };
 
@@ -122,13 +122,13 @@ export const BuyerHomeScreen: React.FC<BuyerHomeScreenProps> = ({
               <View style={[styles.verifiedBuyerBadge, { backgroundColor: tc.surfaceSubtle }]}>
                 <Ionicons name="shield-checkmark" size={13} color={tc.primary} />
                 <Text style={[styles.verifiedBuyerText, { color: tc.primary }]}>
-                  {language === 'rw' ? 'Umuguzi Wemewe' : 'Verified Buyer'}
+                  {language === 'rw' ? 'Umuguzi Wemejwe' : 'Verified Buyer'}
                 </Text>
               </View>
               <View style={[styles.escrowBadge, { backgroundColor: '#F0FDF4' }]}>
                 <Ionicons name="lock-closed" size={11} color="#15803D" />
                 <Text style={styles.escrowBadgeText}>
-                  {language === 'rw' ? 'Escrow Irinzwe' : '100% Escrow Protected'}
+                  {language === 'rw' ? 'Ubwishyu Burinzwe (Escrow)' : '100% Escrow Protected'}
                 </Text>
               </View>
             </View>
@@ -141,7 +141,7 @@ export const BuyerHomeScreen: React.FC<BuyerHomeScreenProps> = ({
             </Text>
             <Text style={[styles.subGreeting, { color: tc.neutralGray }]}>
               {language === 'rw'
-                ? 'Gura umusaruro wabanje gupimwa uva mu makoperative yo mu Rwanda'
+                ? 'Isoko ry\'umusaruro wujuje ubuziranenge uturuka mu makoperative yo mu Rwanda'
                 : 'Direct verified agricultural inventory from Rwanda co-ops'}
             </Text>
           </View>
@@ -152,45 +152,45 @@ export const BuyerHomeScreen: React.FC<BuyerHomeScreenProps> = ({
           <View style={styles.highlightItem}>
             <Ionicons name="checkmark-done-circle" size={18} color={tc.primary} />
             <Text style={[styles.highlightText, { color: tc.neutralHeadings }]}>
-              {language === 'rw' ? 'Byapimwe neza' : 'Quality Inspected'}
+              {language === 'rw' ? 'Ibyujuje Ubuziranenge' : 'Quality Inspected'}
             </Text>
           </View>
           <View style={[styles.highlightDivider, { backgroundColor: tc.borderLight }]} />
           <View style={styles.highlightItem}>
             <Ionicons name="storefront" size={18} color={tc.primary} />
             <Text style={[styles.highlightText, { color: tc.neutralHeadings }]}>
-              {language === 'rw' ? 'Ububiko bwite' : 'Direct Warehouse'}
+              {language === 'rw' ? 'Ububiko Bwizewe' : 'Direct Warehouse'}
             </Text>
           </View>
           <View style={[styles.highlightDivider, { backgroundColor: tc.borderLight }]} />
           <View style={styles.highlightItem}>
             <Ionicons name="flash" size={18} color={tc.accentGold} />
             <Text style={[styles.highlightText, { color: tc.neutralHeadings }]}>
-              {language === 'rw' ? 'Kugemura byihuse' : 'Fast Dispatch'}
+              {language === 'rw' ? 'Igeza Ryihuse' : 'Fast Dispatch'}
             </Text>
           </View>
         </View>
 
-        {/* Featured Stock Section: Swipe right carousel with See All -> For You */}
+        {/* Featured Stock Section: Swipe right carousel with See All -> Explore */}
         <View style={styles.sectionHeaderRow}>
           <View>
             <Text style={[styles.sectionTitle, { color: tc.neutralHeadings }]}>
-              {language === 'rw' ? 'Umusaruro w\'Imena' : 'Featured Warehouse Stock'}
+              {language === 'rw' ? 'Umusaruro Watoranyijwe' : 'Featured Warehouse Stock'}
             </Text>
             <Text style={[styles.sectionSubtitle, { color: tc.neutralGray }]}>
               {language === 'rw'
-                ? 'Kanda ububiko bwose cyangwa ukande Byose ujye muri For You'
-                : 'Swipe right to browse · Click See All to view full catalogue'}
+                ? 'Zunguza iburyo urebe ibihari · Kanda Vumbura Byose ujye mu isoko ryuzuye'
+                : 'Swipe right to browse · Click Explore All to view full catalogue'}
             </Text>
           </View>
           <TouchableOpacity
             onPress={() => onNavigateToSearch?.()}
             style={[styles.seeAllActionBtn, { backgroundColor: tc.surfaceSubtle }]}
             activeOpacity={0.75}
-            accessibilityLabel="See All Featured Produce"
+            accessibilityLabel="Explore All Featured Produce"
           >
             <Text style={[styles.seeAllActionText, { color: tc.primary }]}>
-              {language === 'rw' ? 'Byose' : 'See all'}
+              {language === 'rw' ? 'Vumbura Byose' : 'Explore All'}
             </Text>
             <Ionicons name="arrow-forward" size={14} color={tc.primary} />
           </TouchableOpacity>
@@ -272,7 +272,7 @@ export const BuyerHomeScreen: React.FC<BuyerHomeScreenProps> = ({
                     <View style={[styles.metricRow, { backgroundColor: tc.surfaceSubtle }]}>
                       <View style={styles.metricCol}>
                         <Text style={[styles.metricLabel, { color: tc.neutralGray }]}>
-                          {language === 'rw' ? 'Ihari' : 'Available'}
+                          {language === 'rw' ? 'Ingano Ihari' : 'Available'}
                         </Text>
                         <Text style={[styles.metricVal, { color: tc.neutralHeadings }]}>
                           {group.availableToOrderKg.toLocaleString()} kg
@@ -305,7 +305,7 @@ export const BuyerHomeScreen: React.FC<BuyerHomeScreenProps> = ({
           </ScrollView>
         )}
 
-        {/* Explore Full Catalogue Banner (Links to For You) */}
+        {/* Explore Full Catalogue Banner (Links to Explore) */}
         <TouchableOpacity
           style={[styles.exploreBanner, { backgroundColor: tc.surface, borderColor: tc.borderLight }]}
           onPress={() => onNavigateToSearch?.()}
@@ -316,12 +316,12 @@ export const BuyerHomeScreen: React.FC<BuyerHomeScreenProps> = ({
           </View>
           <View style={{ flex: 1, marginLeft: 12 }}>
             <Text style={[styles.exploreTitle, { color: tc.neutralHeadings }]}>
-              {language === 'rw' ? 'Shakisha ibindi muri For You' : 'Browse Full "For You" Catalogue'}
+              {language === 'rw' ? 'Vumbura ibindi mu Isoko ryose' : 'Explore Full Produce Marketplace'}
             </Text>
             <Text style={[styles.exploreSubtitle, { color: tc.neutralGray }]}>
               {language === 'rw'
-                ? 'Reba ibinyampeke, ibinyamisogwe, n\'ibindi byose biri mu bubiko'
-                : 'Explore all grains, legumes, roots, and verified co-op lots'}
+                ? 'Reba ibinyampeke, ibinyamisogwe, ibirayi n\'ibindi byose biri mu bubiko bwizewe'
+                : 'Browse all grains, legumes, roots, and verified co-op lots'}
             </Text>
           </View>
           <Ionicons name="chevron-forward" size={18} color={tc.primary} />
@@ -332,10 +332,10 @@ export const BuyerHomeScreen: React.FC<BuyerHomeScreenProps> = ({
           <View style={styles.sectionHeaderRow}>
             <View>
               <Text style={[styles.sectionTitle, { color: tc.neutralHeadings }]}>
-                {language === 'rw' ? 'Ibyo Utumije Bya Hafi' : 'Recent Orders'}
+                {language === 'rw' ? 'Ibyatumijwe Bya Hafi' : 'Recent Orders'}
               </Text>
               <Text style={[styles.sectionSubtitle, { color: tc.neutralGray }]}>
-                {language === 'rw' ? 'Amaposho n\'ibiri mu nzira' : 'Track your ongoing orders and delivery status'}
+                {language === 'rw' ? 'Ibyatumijwe n\'ibiri mu nzira yo kugezwaho' : 'Track your ongoing orders and delivery status'}
               </Text>
             </View>
             {recentOrders.length > 0 && (
@@ -352,11 +352,11 @@ export const BuyerHomeScreen: React.FC<BuyerHomeScreenProps> = ({
             <View style={[styles.emptyOrdersCard, { backgroundColor: tc.surface, borderColor: tc.borderLight }]}>
               <Ionicons name="receipt-outline" size={32} color={tc.neutralGray} />
               <Text style={[styles.emptyOrdersTitle, { color: tc.neutralHeadings }]}>
-                {language === 'rw' ? 'Nta cyo uratumiza' : 'No orders placed yet'}
+                {language === 'rw' ? 'Nta komande urakora' : 'No orders placed yet'}
               </Text>
               <Text style={[styles.emptyOrdersText, { color: tc.neutralGray }]}>
                 {language === 'rw'
-                  ? 'Hitamo umusaruro wifuzwa hejuru maze ukore komande yambere.'
+                  ? 'Hitamo mu musaruro watoranyijwe hejuru maze utumize bwa mbere mu buryo bwizewe bwa Escrow.'
                   : 'Select an available crop from the featured stock above to place your first order.'}
               </Text>
             </View>

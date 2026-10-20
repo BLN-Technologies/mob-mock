@@ -36,7 +36,7 @@ export const en = {
     orders: 'Orders',
     tasks: 'Tasks',
     queue: 'Queue',
-    catalogue: 'Discover',
+    catalogue: 'Explore',
     offers: 'Offers',
     notifications: 'Inbox',
     profile: 'Profile',
