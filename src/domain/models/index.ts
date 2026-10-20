@@ -15,6 +15,23 @@ import {
   NotificationType,
 } from '../enums';
 
+export {
+  UserRole,
+  OrganizationType,
+  VerificationStatus,
+  LotStatus,
+  OrderStatus,
+  QualityGrade,
+  OfferStatus,
+  PaymentStatus,
+  PaymentMethod,
+  DisputeStatus,
+  DisputeOutcome,
+  SyncStatus,
+  SyncErrorCategory,
+  NotificationType,
+};
+
 export interface User {
   id: string;
   fullName: string;
