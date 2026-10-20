@@ -33,7 +33,7 @@ export const BuyerCatalogueScreen: React.FC<BuyerCatalogueScreenProps> = ({
   onNavigateToCreateRequest,
   onSelectLot,
 }) => {
-  const { t } = useTranslation();
+  const { t, language } = useTranslation();
   const { colors: tc, isDark } = useTheme();
   const [lots, setLots] = useState<BuyerLotProjection[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
@@ -136,47 +136,58 @@ export const BuyerCatalogueScreen: React.FC<BuyerCatalogueScreenProps> = ({
 
   return (
     <View style={[styles.container, { backgroundColor: tc.background }]}>
-      {/* 1. Marketplace Header */}
+      {/* 1. Integrated Search & Filter Header (Clean, un-duplicated layout) */}
       <View style={[styles.header, { backgroundColor: tc.surface, borderBottomColor: tc.borderLight }]}>
-        <View style={styles.headerTopRow}>
-          <View style={styles.headerTitles}>
-            <View style={styles.headerTagRow}>
-              <View style={[styles.liveIndicatorDot, { backgroundColor: tc.primary }]} />
-              <Text style={[styles.headerTagText, { color: tc.primary }]}>{t.buyer.verifiedBadge}</Text>
-            </View>
-            <Text style={[styles.title, { color: tc.neutralHeadings }]}>{t.buyer.discoverTitle}</Text>
-            <Text style={[styles.subtitle, { color: tc.neutralGray }]} numberOfLines={2}>
-              {t.buyer.discoverSubtitle}
-            </Text>
+        <View style={styles.searchRow}>
+          <View style={[styles.searchBar, { backgroundColor: tc.surfaceSubtle, borderColor: tc.borderLight }]}>
+            <Ionicons name="search" size={18} color={tc.neutralGray} style={styles.searchIcon} />
+            <TextInput
+              value={searchQuery}
+              onChangeText={setSearchQuery}
+              placeholder={t.buyer.searchPlaceholder}
+              placeholderTextColor={tc.neutralGray}
+              style={[styles.searchInput, { color: tc.neutralDark }]}
+              returnKeyType="search"
+              accessibilityLabel={t.buyer.searchPlaceholder}
+            />
+            {searchQuery.length > 0 && (
+              <TouchableOpacity
+                onPress={() => setSearchQuery('')}
+                style={styles.clearSearchBtn}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                accessibilityRole="button"
+                accessibilityLabel={t.buyer.resetSearch}
+              >
+                <Ionicons name="close-circle" size={18} color={tc.neutralGray} />
+              </TouchableOpacity>
+            )}
           </View>
+
+          <TouchableOpacity
+            style={[
+              styles.filterQuickBtn,
+              {
+                backgroundColor: activeFilterCount > 0 ? tc.primary : tc.surfaceSubtle,
+                borderColor: activeFilterCount > 0 ? tc.primary : tc.borderLight,
+              },
+            ]}
+            onPress={openFilterModal}
+            activeOpacity={0.8}
+            accessibilityRole="button"
+            accessibilityLabel={t.buyer.filterButton}
+          >
+            <Ionicons
+              name="options-outline"
+              size={18}
+              color={activeFilterCount > 0 ? '#FFFFFF' : tc.neutralHeadings}
+            />
+            {activeFilterCount > 0 && (
+              <View style={[styles.filterDot, { backgroundColor: tc.brandGold }]} />
+            )}
+          </TouchableOpacity>
         </View>
 
-        {/* 2. Interactive Search Bar */}
-        <View style={[styles.searchBar, { backgroundColor: tc.surfaceSubtle, borderColor: tc.borderLight }]}>
-          <Ionicons name="search" size={18} color={tc.neutralGray} style={styles.searchIcon} />
-          <TextInput
-            value={searchQuery}
-            onChangeText={setSearchQuery}
-            placeholder={t.buyer.searchPlaceholder}
-            placeholderTextColor={tc.neutralGray}
-            style={[styles.searchInput, { color: tc.neutralDark }]}
-            returnKeyType="search"
-            accessibilityLabel={t.buyer.searchPlaceholder}
-          />
-          {searchQuery.length > 0 && (
-            <TouchableOpacity
-              onPress={() => setSearchQuery('')}
-              style={styles.clearSearchBtn}
-              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-              accessibilityRole="button"
-              accessibilityLabel={t.buyer.resetSearch}
-            >
-              <Ionicons name="close-circle" size={18} color={colors.neutralGray} />
-            </TouchableOpacity>
-          )}
-        </View>
-
-        {/* 3. Horizontal Category Navigation */}
+        {/* 2. Horizontal Category Navigation */}
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
@@ -404,13 +415,57 @@ export const BuyerCatalogueScreen: React.FC<BuyerCatalogueScreenProps> = ({
           )}
 
           {lots.length === 0 ? (
-            <EmptyState
-              icon="search-outline"
-              title={t.buyer.noResultsTitle}
-              description={t.buyer.noResultsDesc}
-              actionTitle={t.buyer.postRequest}
-              onActionPress={onNavigateToCreateRequest}
-            />
+            <View style={[styles.emptyContainer, { backgroundColor: tc.surfaceCard, borderColor: tc.borderLight }]}>
+              <View style={[styles.emptyIconCircle, { backgroundColor: tc.surfaceSubtle }]}>
+                <Ionicons name="search" size={30} color={tc.primary} />
+              </View>
+              <Text style={[styles.emptyTitle, { color: tc.neutralHeadings }]}>
+                {language === 'rw' ? 'Nta musaruro ubonetse' : 'No matching crops found'}
+              </Text>
+              <Text style={[styles.emptyDesc, { color: tc.neutralGray }]}>
+                {language === 'rw'
+                  ? 'Gerageza guhindura amagambo cyangwa usubize ibipimo ku Byose.'
+                  : 'Try adjusting your search query or reset category filter.'}
+              </Text>
+              <TouchableOpacity
+                style={[styles.emptyResetBtn, { backgroundColor: tc.primary }]}
+                onPress={resetAllFilters}
+                activeOpacity={0.8}
+              >
+                <Ionicons name="refresh" size={16} color="#FFFFFF" />
+                <Text style={styles.emptyResetText}>
+                  {language === 'rw' ? 'Subiza ku Musaruro Wose' : 'Reset All Filters'}
+                </Text>
+              </TouchableOpacity>
+
+              {/* Quick suggestions */}
+              <View style={[styles.quickSuggestionsWrap, { borderColor: tc.borderLight }]}>
+                <Text style={[styles.quickSuggestLabel, { color: tc.neutralGray }]}>
+                  {language === 'rw' ? 'Cyangwa hitamo igihingwa:' : 'Or browse popular crops:'}
+                </Text>
+                <View style={styles.quickSuggestRow}>
+                  {[
+                    { label: language === 'rw' ? 'Ibigori' : 'Maize', query: 'Maize' },
+                    { label: language === 'rw' ? 'Ibishyimbo' : 'Beans', query: 'Beans' },
+                    { label: language === 'rw' ? 'Ibirayi' : 'Potatoes', query: 'Potatoes' },
+                    { label: language === 'rw' ? 'Inyanya' : 'Tomatoes', query: 'Tomatoes' },
+                    { label: language === 'rw' ? 'Umuceri' : 'Rice', query: 'Rice' },
+                  ].map(s => (
+                    <TouchableOpacity
+                      key={s.query}
+                      style={[styles.suggestChip, { backgroundColor: tc.surfaceSubtle, borderColor: tc.borderLight }]}
+                      onPress={() => {
+                        resetAllFilters();
+                        setSearchQuery(s.query);
+                      }}
+                      activeOpacity={0.75}
+                    >
+                      <Text style={[styles.suggestChipText, { color: tc.primary }]}>{s.label}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </View>
+            </View>
           ) : viewMode === 'grid' ? (
             /* 2-Column Responsive Grid View */
             <View style={styles.gridContainer}>
@@ -725,20 +780,39 @@ const styles = StyleSheet.create({
     marginTop: 1,
     lineHeight: 15,
   },
-  postRequestBtn: {
-    marginTop: 2,
-  },
-  searchBar: {
+  searchRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: colors.surfaceSubtle,
-    marginHorizontal: spacing.md,
+    paddingHorizontal: spacing.md,
+    paddingTop: spacing.sm,
+    paddingBottom: spacing.xs,
+    gap: spacing.sm,
+  },
+  searchBar: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
     borderRadius: radii.md,
     borderWidth: 1,
-    borderColor: colors.border,
-    paddingHorizontal: spacing.md,
+    paddingHorizontal: spacing.sm + 4,
     height: 42,
-    marginBottom: spacing.xs + 2,
+  },
+  filterQuickBtn: {
+    width: 42,
+    height: 42,
+    borderRadius: radii.md,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    position: 'relative',
+  },
+  filterDot: {
+    position: 'absolute',
+    top: 6,
+    right: 6,
+    width: 8,
+    height: 8,
+    borderRadius: 4,
   },
   searchIcon: {
     marginRight: spacing.sm,
@@ -895,6 +969,77 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '700',
     color: colors.danger,
+  },
+  emptyContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: spacing.xl,
+    marginHorizontal: spacing.md,
+    marginTop: spacing.md,
+    borderRadius: radii.lg,
+    borderWidth: 1,
+    ...shadows.subtle,
+  },
+  emptyIconCircle: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: spacing.sm,
+  },
+  emptyTitle: {
+    fontSize: 16,
+    fontWeight: '800',
+    marginBottom: 4,
+  },
+  emptyDesc: {
+    fontSize: 13,
+    textAlign: 'center',
+    lineHeight: 18,
+    marginBottom: spacing.md,
+    paddingHorizontal: spacing.md,
+  },
+  emptyResetBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingVertical: 10,
+    paddingHorizontal: 20,
+    borderRadius: radii.full,
+    marginBottom: spacing.lg,
+  },
+  emptyResetText: {
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  quickSuggestionsWrap: {
+    width: '100%',
+    alignItems: 'center',
+    borderTopWidth: 1,
+    paddingTop: spacing.md,
+  },
+  quickSuggestLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    marginBottom: spacing.xs,
+  },
+  quickSuggestRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'center',
+    gap: 6,
+  },
+  suggestChip: {
+    paddingVertical: 5,
+    paddingHorizontal: 12,
+    borderRadius: radii.full,
+    borderWidth: 1,
+  },
+  suggestChipText: {
+    fontSize: 12,
+    fontWeight: '700',
   },
   scrollContent: {
     paddingBottom: spacing.xxxl + 30,

@@ -115,59 +115,51 @@ export const BuyerHomeScreen: React.FC<BuyerHomeScreenProps> = ({
           />
         }
       >
-        {/* Buyer Header Banner */}
+        {/* Buyer Hero Greeting Section */}
         <View style={styles.header}>
           <View style={{ flex: 1 }}>
-            <View style={styles.badgeRow}>
-              <View style={[styles.verifiedBuyerBadge, { backgroundColor: tc.surfaceSubtle }]}>
-                <Ionicons name="shield-checkmark" size={13} color={tc.primary} />
-                <Text style={[styles.verifiedBuyerText, { color: tc.primary }]}>
-                  {language === 'rw' ? 'Umuguzi Wemejwe' : 'Verified Buyer'}
+            <View style={styles.greetingHeaderRow}>
+              <Text style={[styles.greeting, { color: tc.neutralHeadings }]}>
+                {language === 'rw' ? 'Muraho, ' : 'Welcome, '}
+                <Text style={[styles.userName, { color: tc.primary }]}>
+                  {user.fullName.split(' ')[0]} 👋
                 </Text>
-              </View>
-              <View style={[styles.escrowBadge, { backgroundColor: '#F0FDF4' }]}>
-                <Ionicons name="lock-closed" size={11} color="#15803D" />
-                <Text style={styles.escrowBadgeText}>
-                  {language === 'rw' ? 'Ubwishyu Burinzwe (Escrow)' : '100% Escrow Protected'}
+              </Text>
+              <View style={[styles.verifiedBuyerBadge, { backgroundColor: tc.surfaceSubtle }]}>
+                <Ionicons name="shield-checkmark" size={12} color={tc.primary} />
+                <Text style={[styles.verifiedBuyerText, { color: tc.primary }]}>
+                  {language === 'rw' ? 'Wemejwe' : 'Verified'}
                 </Text>
               </View>
             </View>
 
-            <Text style={[styles.greeting, { color: tc.neutralHeadings }]}>
-              {language === 'rw' ? 'Muraho, ' : 'Welcome, '}
-              <Text style={[styles.userName, { color: tc.primary }]}>
-                {user.fullName.split(' ')[0]}
-              </Text>
-            </Text>
             <Text style={[styles.subGreeting, { color: tc.neutralGray }]}>
               {language === 'rw'
-                ? 'Isoko ry\'umusaruro wujuje ubuziranenge uturuka mu makoperative yo mu Rwanda'
+                ? 'Isoko ry\'ubuhinzi bwizewe mu Rwanda'
                 : 'Direct verified agricultural inventory from Rwanda co-ops'}
             </Text>
-          </View>
-        </View>
 
-        {/* Value Highlights Pill Row */}
-        <View style={[styles.highlightsContainer, { backgroundColor: tc.surface, borderColor: tc.borderLight }]}>
-          <View style={styles.highlightItem}>
-            <Ionicons name="checkmark-done-circle" size={18} color={tc.primary} />
-            <Text style={[styles.highlightText, { color: tc.neutralHeadings }]}>
-              {language === 'rw' ? 'Ibyujuje Ubuziranenge' : 'Quality Inspected'}
-            </Text>
-          </View>
-          <View style={[styles.highlightDivider, { backgroundColor: tc.borderLight }]} />
-          <View style={styles.highlightItem}>
-            <Ionicons name="storefront" size={18} color={tc.primary} />
-            <Text style={[styles.highlightText, { color: tc.neutralHeadings }]}>
-              {language === 'rw' ? 'Ububiko Bwizewe' : 'Direct Warehouse'}
-            </Text>
-          </View>
-          <View style={[styles.highlightDivider, { backgroundColor: tc.borderLight }]} />
-          <View style={styles.highlightItem}>
-            <Ionicons name="flash" size={18} color={tc.brandGold} />
-            <Text style={[styles.highlightText, { color: tc.neutralHeadings }]}>
-              {language === 'rw' ? 'Igeza Ryihuse' : 'Fast Dispatch'}
-            </Text>
+            {/* Clean compact 1-word trust chips */}
+            <View style={styles.compactTrustRow}>
+              <View style={[styles.trustChip, { backgroundColor: tc.surfaceSubtle, borderColor: tc.borderLight }]}>
+                <Ionicons name="checkmark-circle" size={12} color={tc.primary} />
+                <Text style={[styles.trustChipText, { color: tc.primary }]}>
+                  {language === 'rw' ? 'Ubuziranenge' : 'Quality'}
+                </Text>
+              </View>
+              <View style={[styles.trustChip, { backgroundColor: tc.surfaceSubtle, borderColor: tc.borderLight }]}>
+                <Ionicons name="storefront-outline" size={12} color={tc.primary} />
+                <Text style={[styles.trustChipText, { color: tc.primary }]}>
+                  {language === 'rw' ? 'Ububiko' : 'Warehouse'}
+                </Text>
+              </View>
+              <View style={[styles.trustChip, { backgroundColor: tc.surfaceSubtle, borderColor: tc.borderLight }]}>
+                <Ionicons name="flash-outline" size={12} color={tc.brandGold} />
+                <Text style={[styles.trustChipText, { color: tc.brandGold }]}>
+                  {language === 'rw' ? 'Byihuse' : 'Direct'}
+                </Text>
+              </View>
+            </View>
           </View>
         </View>
 
@@ -424,11 +416,11 @@ const styles = StyleSheet.create({
     paddingTop: spacing.md,
     paddingBottom: spacing.sm,
   },
-  badgeRow: {
+  greetingHeaderRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-    marginBottom: 6,
+    justifyContent: 'space-between',
+    marginBottom: 4,
   },
   verifiedBuyerBadge: {
     flexDirection: 'row',
@@ -442,21 +434,6 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '700',
   },
-  escrowBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: radii.full,
-    borderWidth: 1,
-    borderColor: '#BBF7D0',
-  },
-  escrowBadgeText: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: '#15803D',
-  },
   greeting: {
     ...typography.h2,
     fontSize: 22,
@@ -469,33 +446,26 @@ const styles = StyleSheet.create({
     ...typography.small,
     fontSize: 13,
     marginTop: 2,
+    marginBottom: 10,
     lineHeight: 18,
   },
-  highlightsContainer: {
+  compactTrustRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    marginHorizontal: spacing.lg,
-    marginTop: spacing.sm,
-    marginBottom: spacing.md,
-    paddingVertical: 10,
-    paddingHorizontal: 12,
-    borderRadius: radii.md,
+    gap: 8,
+  },
+  trustChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: radii.sm,
     borderWidth: 1,
-    ...shadows.subtle,
   },
-  highlightItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-  },
-  highlightText: {
+  trustChipText: {
     fontSize: 11,
     fontWeight: '700',
-  },
-  highlightDivider: {
-    width: 1,
-    height: 18,
   },
   sectionHeaderRow: {
     flexDirection: 'row',
