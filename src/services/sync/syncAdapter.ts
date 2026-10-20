@@ -6,7 +6,7 @@
 
 import { GradingRecord, Lot, User } from '../../domain/models';
 import { SyncErrorCategory, LotStatus, QualityGrade } from '../../domain/enums';
-import { mockState } from '../mock/mockServices';
+import { mockNetworkState } from '../mock/mockNetworkState';
 
 export interface SyncSubmissionResult {
   success: boolean;
@@ -15,6 +15,16 @@ export interface SyncSubmissionResult {
   serverRecordId?: string;
   isDuplicate?: boolean;
 }
+
+export interface ISyncLotProvider {
+  getLotById: (lotId: string) => Promise<Lot | null | undefined>;
+}
+
+let syncLotProvider: ISyncLotProvider | null = null;
+
+export const setSyncAdapterLotProvider = (provider: ISyncLotProvider) => {
+  syncLotProvider = provider;
+};
 
 export interface ISyncAdapter {
   submitGrading(params: {
@@ -49,7 +59,7 @@ export const mockSyncAdapter: ISyncAdapter = {
     }
 
     // 2. Simulated Connectivity Check
-    if (mockState.isOffline()) {
+    if (mockNetworkState.isOffline()) {
       return {
         success: false,
         errorCategory: SyncErrorCategory.TRANSIENT,
@@ -72,9 +82,8 @@ export const mockSyncAdapter: ISyncAdapter = {
     }
 
     // 4. Entity Existence & Conflict Check
-    // We dynamically query lotService to check authoritative lot status
-    const { lotService } = await import('../mock/mockServices');
-    const lot = await lotService.getLotById(lotId);
+    // We query registered lot provider to check authoritative lot status without circular module import
+    const lot = syncLotProvider ? await syncLotProvider.getLotById(lotId) : null;
 
     if (!lot) {
       return {

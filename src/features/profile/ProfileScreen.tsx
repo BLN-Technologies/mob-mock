@@ -239,87 +239,56 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
           </Card>
         )}
 
-        {/* Theme Preference Selection */}
-        <Card style={styles.sectionCard}>
-          <View style={styles.cardHeaderRow}>
-            <View style={styles.cardHeaderLeft}>
-              <Ionicons name="moon-outline" size={18} color={colors.primary} />
-              <Text style={styles.cardSectionTitle}>Appearance & Theme</Text>
-            </View>
-          </View>
-
-          <View style={styles.themeGrid}>
-            {(['system', 'light', 'dark'] as ThemeMode[]).map(modeOpt => {
-              const isActive = themeMode === modeOpt;
-              return (
-                <TouchableOpacity
-                  key={modeOpt}
-                  style={[styles.themeBtn, isActive && styles.themeBtnActive]}
-                  onPress={() => setThemeMode(modeOpt)}
-                  activeOpacity={0.8}
-                  accessibilityRole="button"
-                  accessibilityLabel={`${modeOpt} theme`}
-                >
-                  <Ionicons
-                    name={
-                      modeOpt === 'system'
-                        ? 'phone-portrait-outline'
-                        : modeOpt === 'light'
-                        ? 'sunny-outline'
-                        : 'moon-outline'
-                    }
-                    size={16}
-                    color={isActive ? colors.primary : colors.neutralGray}
-                  />
-                  <Text style={[styles.themeBtnText, isActive && styles.themeBtnTextActive]}>
-                    {modeOpt.charAt(0).toUpperCase() + modeOpt.slice(1)}
-                  </Text>
-                  {isActive && (
-                    <Ionicons name="checkmark-circle" size={14} color={colors.primary} />
-                  )}
-                </TouchableOpacity>
-              );
-            })}
-          </View>
-        </Card>
 
         {/* Language Selection Card */}
         <Card style={styles.sectionCard}>
           <View style={styles.cardHeaderRow}>
             <View style={styles.cardHeaderLeft}>
-              <Ionicons name="globe-outline" size={18} color={colors.primary} />
-              <Text style={styles.cardSectionTitle}>{t.profile.language}</Text>
+              <Ionicons name="globe-outline" size={18} color={tc.primary} />
+              <Text style={[styles.cardSectionTitle, { color: tc.neutralHeadings }]}>{t.profile.language}</Text>
             </View>
           </View>
 
           <View style={styles.langGrid}>
             <TouchableOpacity
-              style={[styles.langBtn, language === 'rw' && styles.langBtnActive]}
+              style={[
+                styles.langBtn,
+                {
+                  backgroundColor: language === 'rw' ? tc.surfaceSubtle : tc.surface,
+                  borderColor: language === 'rw' ? tc.primary : tc.borderLight,
+                },
+              ]}
               onPress={() => handleLanguageToggle('rw')}
               activeOpacity={0.8}
               accessibilityRole="button"
             >
               <Text style={styles.flagText}>🇷🇼</Text>
-              <Text style={[styles.langBtnText, language === 'rw' && styles.langBtnTextActive]}>
+              <Text style={[styles.langBtnText, { color: language === 'rw' ? tc.primary : tc.neutralGray }]}>
                 Ikinyarwanda
               </Text>
               {language === 'rw' && (
-                <Ionicons name="checkmark-circle" size={16} color={colors.primary} />
+                <Ionicons name="checkmark-circle" size={16} color={tc.primary} />
               )}
             </TouchableOpacity>
 
             <TouchableOpacity
-              style={[styles.langBtn, language === 'en' && styles.langBtnActive]}
+              style={[
+                styles.langBtn,
+                {
+                  backgroundColor: language === 'en' ? tc.surfaceSubtle : tc.surface,
+                  borderColor: language === 'en' ? tc.primary : tc.borderLight,
+                },
+              ]}
               onPress={() => handleLanguageToggle('en')}
               activeOpacity={0.8}
               accessibilityRole="button"
             >
               <Text style={styles.flagText}>🇬🇧</Text>
-              <Text style={[styles.langBtnText, language === 'en' && styles.langBtnTextActive]}>
+              <Text style={[styles.langBtnText, { color: language === 'en' ? tc.primary : tc.neutralGray }]}>
                 English
               </Text>
               {language === 'en' && (
-                <Ionicons name="checkmark-circle" size={16} color={colors.primary} />
+                <Ionicons name="checkmark-circle" size={16} color={tc.primary} />
               )}
             </TouchableOpacity>
           </View>

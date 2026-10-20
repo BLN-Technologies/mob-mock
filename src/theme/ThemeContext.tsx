@@ -1,13 +1,14 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { useColorScheme } from 'react-native';
 import { safeGetItem, safeSetItem } from '../data/local/storage';
-import { lightColors, darkColors } from './tokens';
+import { lightColors, darkColors, colors as mutableColors } from './tokens';
 
 export type ThemeMode = 'system' | 'light' | 'dark';
 
-interface ThemeContextType {
+export interface ThemeContextType {
   mode: ThemeMode;
   setThemeMode: (mode: ThemeMode) => Promise<void>;
+  toggleTheme: () => Promise<void>;
   isDark: boolean;
   colors: typeof lightColors;
 }
@@ -17,6 +18,7 @@ const THEME_STORAGE_KEY = '@cargo_app_theme_mode_v1';
 const ThemeContext = createContext<ThemeContextType>({
   mode: 'system',
   setThemeMode: async () => {},
+  toggleTheme: async () => {},
   isDark: false,
   colors: lightColors,
 });
@@ -51,8 +53,24 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
   const themeColors = isDark ? darkColors : lightColors;
 
+  // Sync the mutable global fallback token object so static styles also adapt
+  Object.assign(mutableColors, themeColors);
+
+  const toggleTheme = async () => {
+    const nextMode: ThemeMode = isDark ? 'light' : 'dark';
+    await setThemeMode(nextMode);
+  };
+
   return (
-    <ThemeContext.Provider value={{ mode, setThemeMode, isDark, colors: themeColors }}>
+    <ThemeContext.Provider
+      value={{
+        mode,
+        setThemeMode,
+        toggleTheme,
+        isDark,
+        colors: themeColors,
+      }}
+    >
       {children}
     </ThemeContext.Provider>
   );

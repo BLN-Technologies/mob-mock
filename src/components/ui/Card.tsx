@@ -1,6 +1,7 @@
 import React from 'react';
 import { View, StyleSheet, ViewStyle, TouchableOpacity, StyleProp } from 'react-native';
-import { colors, radii, shadows, spacing } from '../../theme/tokens';
+import { radii, shadows, spacing } from '../../theme/tokens';
+import { useTheme } from '../../theme/ThemeContext';
 
 interface CardProps {
   children: React.ReactNode;
@@ -17,17 +18,36 @@ export const Card: React.FC<CardProps> = ({
   padding = 'md',
   onPress,
 }) => {
-  const getVariantStyle = () => {
+  const { colors: tc } = useTheme();
+
+  const getVariantStyle = (): ViewStyle => {
     switch (variant) {
       case 'outlined':
-        return styles.outlined;
+        return {
+          backgroundColor: tc.surface,
+          borderWidth: 1.5,
+          borderColor: tc.border,
+        };
       case 'flat':
-        return styles.flat;
+        return {
+          backgroundColor: tc.surfaceSubtle,
+          borderWidth: 1,
+          borderColor: tc.borderLight,
+        };
       case 'highlighted':
-        return styles.highlighted;
+        return {
+          backgroundColor: tc.surfaceHighlighted,
+          borderWidth: 1.5,
+          borderColor: tc.successBorder,
+        };
       case 'elevated':
       default:
-        return styles.elevated;
+        return {
+          backgroundColor: tc.surfaceCard,
+          borderWidth: 1,
+          borderColor: tc.borderLight,
+          ...shadows.subtle,
+        };
     }
   };
 
@@ -67,28 +87,6 @@ const styles = StyleSheet.create({
   base: {
     borderRadius: radii.md,
     marginBottom: spacing.md,
-  },
-  elevated: {
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.border,
-    ...shadows.subtle,
-  },
-  outlined: {
-    backgroundColor: colors.surface,
-    borderWidth: 1.5,
-    borderColor: colors.border,
-  },
-  flat: {
-    backgroundColor: colors.surfaceSubtle,
-    borderWidth: 1,
-    borderColor: colors.borderLight,
-  },
-  highlighted: {
-    backgroundColor: colors.surfaceHighlighted,
-    borderWidth: 1.5,
-    borderColor: colors.successBorder,
-    ...shadows.subtle,
   },
   pNone: {
     padding: 0,

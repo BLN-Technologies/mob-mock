@@ -14,6 +14,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, radii, shadows, typography, spacing } from '../../theme/tokens';
 import { useTranslation, Language } from '../../i18n';
+import { useTheme } from '../../theme/ThemeContext';
 import { Button } from '../../components/ui/Button';
 import { FormField } from '../../components/forms/FormField';
 import { OtpModal } from './OtpModal';
@@ -32,6 +33,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
   onNavigateBack,
 }) => {
   const { t, language, setLanguage } = useTranslation();
+  const { mode: themeMode, setThemeMode, colors: tc } = useTheme();
   const [identifier, setIdentifier] = useState('+250788111222');
   const [password, setPassword] = useState('password123');
   const [showPassword, setShowPassword] = useState(false);
@@ -364,6 +366,39 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
                     {language === 'rw' ? 'Kinyarwanda (Changer)' : 'English (Change)'}
                   </Text>
                 </TouchableOpacity>
+              </View>
+              <View style={styles.infoRow}>
+                <Text style={styles.infoLabel}>Theme</Text>
+                <View style={{ flexDirection: 'row', gap: 6 }}>
+                  {(['system', 'light', 'dark'] as const).map(m => {
+                    const isSel = themeMode === m;
+                    return (
+                      <TouchableOpacity
+                        key={m}
+                        onPress={() => setThemeMode(m)}
+                        activeOpacity={0.8}
+                        style={{
+                          paddingVertical: 5,
+                          paddingHorizontal: 10,
+                          borderRadius: radii.full,
+                          borderWidth: 1,
+                          borderColor: isSel ? tc.primary : tc.border,
+                          backgroundColor: isSel ? tc.primary : tc.surfaceSubtle,
+                        }}
+                      >
+                        <Text
+                          style={{
+                            fontSize: 11,
+                            fontWeight: '700',
+                            color: isSel ? '#FFFFFF' : tc.neutralDark,
+                          }}
+                        >
+                          {m.charAt(0).toUpperCase() + m.slice(1)}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
               </View>
             </View>
 

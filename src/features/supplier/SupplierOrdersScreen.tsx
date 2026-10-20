@@ -136,9 +136,6 @@ export const SupplierOrdersScreen: React.FC<SupplierOrdersScreenProps> = ({ user
                       Delivery: {order.agreedDeliveryDate} · {order.deliveryDistrict}
                     </Text>
                   </View>
-                  {order.paymentReference && (
-                    <Text style={styles.paymentRefText}>Ref: {order.paymentReference}</Text>
-                  )}
                 </View>
 
                 {/* BR-03: Payment Confirmation & Dispatch Controls */}

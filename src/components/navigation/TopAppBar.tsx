@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, radii, shadows, typography, spacing } from '../../theme/tokens';
 import { useTranslation } from '../../i18n';
+import { useTheme } from '../../theme/ThemeContext';
 import { User } from '../../domain/models';
 
 interface TopAppBarProps {
@@ -29,36 +30,37 @@ export const TopAppBar: React.FC<TopAppBarProps> = ({
   unreadCount = 0,
 }) => {
   const { t } = useTranslation();
+  const { colors: tc, isDark } = useTheme();
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor: tc.surface, borderBottomColor: tc.borderLight }]}>
       <View style={styles.leftContainer}>
         {showBack ? (
           <TouchableOpacity
             onPress={onBack}
-            style={styles.backButton}
+            style={[styles.backButton, { backgroundColor: tc.surfaceSubtle }]}
             accessibilityLabel={t.common.back}
             accessibilityRole="button"
             hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
           >
-            <Ionicons name="arrow-back" size={22} color={colors.neutralDark} />
+            <Ionicons name="arrow-back" size={22} color={tc.neutralDark} />
           </TouchableOpacity>
         ) : (
-          <View style={styles.brandBadge}>
+          <View style={[styles.brandBadge, { backgroundColor: tc.primary }]}>
             <Ionicons name="leaf" size={18} color="#FFFFFF" />
           </View>
         )}
 
         <View style={styles.titleContainer}>
-          <Text style={styles.title} numberOfLines={1}>
+          <Text style={[styles.title, { color: tc.neutralHeadings }]} numberOfLines={1}>
             {title || t.common.appName}
           </Text>
           {subtitle ? (
-            <Text style={styles.subtitle} numberOfLines={1}>
+            <Text style={[styles.subtitle, { color: tc.neutralGray }]} numberOfLines={1}>
               {subtitle}
             </Text>
           ) : user ? (
-            <Text style={styles.subtitle} numberOfLines={1}>
+            <Text style={[styles.subtitle, { color: tc.neutralGray }]} numberOfLines={1}>
               {(t.roles as any)[user.role] || user.role}
             </Text>
           ) : null}
@@ -75,7 +77,7 @@ export const TopAppBar: React.FC<TopAppBarProps> = ({
             accessibilityLabel={t.notifications.title}
             accessibilityRole="button"
           >
-            <Ionicons name="notifications-outline" size={22} color={colors.neutralDark} />
+            <Ionicons name="notifications-outline" size={22} color={tc.neutralDark} />
             {unreadCount > 0 && (
               <View style={styles.badgeIndicator}>
                 <Text style={styles.badgeText}>

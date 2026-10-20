@@ -53,7 +53,8 @@ import { projectLotForBuyer } from '../../domain/projections/buyerProjections';
 import { aggregateWarehouseStock } from '../../domain/projections/warehouseStock';
 import { localStorage } from '../../data/local/storage';
 import { syncCoordinator } from '../sync/syncCoordinator';
-import { mockSyncAdapter } from '../sync/syncAdapter';
+import { mockSyncAdapter, setSyncAdapterLotProvider } from '../sync/syncAdapter';
+import { mockNetworkState } from './mockNetworkState';
 import {
   IAuthService,
   SupplierRegistrationInput,
@@ -122,15 +123,15 @@ const INITIAL_AGENT_INVITATIONS: AgentInvitation[] = [
   },
 ];
 
-let isSimulatedOffline = false;
 let agentInvitationsState: AgentInvitation[] = [...INITIAL_AGENT_INVITATIONS];
 
 export const mockState = {
-  isOffline: () => isSimulatedOffline,
+  isOffline: () => mockNetworkState.isOffline(),
   setOffline: (offline: boolean) => {
-    isSimulatedOffline = offline;
+    mockNetworkState.setOffline(offline);
   },
   resetAll: async () => {
+    mockNetworkState.setOffline(false);
     usersState = [...SEED_USERS];
     organizationsState = [...SEED_ORGANIZATIONS];
     lotsState = [...SEED_LOTS];
@@ -961,13 +962,13 @@ export const gradingService = {
       editDeadline: editDeadline.toISOString(),
       editHistory: [],
       notes,
-      isOfflineSubmission: isSimulatedOffline,
+      isOfflineSubmission: mockNetworkState.isOffline(),
       createdAt: submissionTime.toISOString(),
     };
 
     gradingRecordsState.push(gradingRecord);
 
-    if (isSimulatedOffline) {
+    if (mockNetworkState.isOffline()) {
       // Enqueue to persistent offline queue with client idempotency key & local inspection persistence
       await syncCoordinator.enqueueInspection(lotId, gradingRecord, agent);
       return gradingRecord;
@@ -996,6 +997,11 @@ export const gradingService = {
     return gradingRecord;
   },
 };
+
+// Wire authoritative lot lookup for offline sync adapter without circular module imports
+setSyncAdapterLotProvider({
+  getLotById: async (id: string) => lotService.getLotById(id),
+});
 
 // 3.1 Administrator Operations & Approval Service (BR-02)
 export const adminApprovalService = {

@@ -77,68 +77,68 @@ export const lightColors = {
 };
 
 export const darkColors = {
-  // Brand - Dark theme
-  primary: '#2F6B4F',
-  primaryDark: '#103B2B',
-  primaryDeep: '#0B281D',
-  primaryLight: '#183024',
-  primaryMuted: '#174A35',
-  accent: '#3FA379',
-  accentDark: '#103B2B',
-  accentLight: '#1B3D2E',
-  brandForest: '#2F6B4F',
-  brandDeep: '#103B2B',
+  // Brand - Refined Instagram-Grade High Contrast Dark Mode
+  primary: '#10B981',
+  primaryDark: '#059669',
+  primaryDeep: '#047857',
+  primaryLight: '#132E22',
+  primaryMuted: '#10B981',
+  accent: '#34D399',
+  accentDark: '#059669',
+  accentLight: '#153A2A',
+  brandForest: '#10B981',
+  brandDeep: '#059669',
   brandGold: '#F59E0B',
   brandAmber: '#FBBF24',
-  softMint: '#183024',
+  softMint: '#132E22',
 
-  // Surfaces & Backgrounds
-  background: '#0D1410',
-  backgroundWarm: '#121C16',
-  surface: '#15211B',
-  surfaceSubtle: '#1C2E25',
-  surfaceCard: '#18261F',
-  surfaceHighlighted: '#1E3329',
-  surfaceMint: '#183024',
-  white: '#15211B',
+  // Surfaces & Backgrounds - Sleek true dark (IG / Spotify aesthetic)
+  background: '#090D0B',
+  backgroundWarm: '#0E1411',
+  surface: '#121A15',
+  surfaceSubtle: '#1A2720',
+  surfaceCard: '#15211B',
+  surfaceHighlighted: '#1E3026',
+  surfaceMint: '#132E22',
+  white: '#FFFFFF',
   error: '#F87171',
 
-  // Neutrals
-  neutralDark: '#F7F8F5',
-  neutralHeadings: '#F7F8F5',
-  neutralBody: '#DCE4DD',
+  // Neutrals - Crisp, legible typography against dark canvas
+  neutralDark: '#FFFFFF',
+  neutralHeadings: '#FFFFFF',
+  neutralBody: '#E2E8F0',
   neutralGray: '#94A3B8',
-  neutralLight: '#66716A',
+  neutralLight: '#64748B',
   neutralSubtle: '#33483D',
-  border: '#283C31',
-  borderLight: '#1E3027',
-  borderFocus: '#2F6B4F',
-  divider: '#203328',
+  border: '#223429',
+  borderLight: '#19261F',
+  borderFocus: '#10B981',
+  divider: '#1C2B22',
 
   // Status & Semantic Colors
-  success: '#2F6B4F',
-  successDark: '#174A35',
-  successLight: '#183024',
-  successBorder: '#2F6B4F',
+  success: '#10B981',
+  successDark: '#059669',
+  successLight: '#132E22',
+  successBorder: '#10B981',
 
   warning: '#F59E0B',
-  warningDark: '#A96812',
+  warningDark: '#D97706',
   warningLight: '#3D2D10',
-  warningBorder: '#A96812',
+  warningBorder: '#D97706',
 
   danger: '#F87171',
-  dangerDark: '#B42318',
+  dangerDark: '#EF4444',
   dangerLight: '#3A1513',
-  dangerBorder: '#B42318',
+  dangerBorder: '#EF4444',
 
   info: '#60A5FA',
-  infoDark: '#2563EB',
+  infoDark: '#3B82F6',
   infoLight: '#172B4D',
-  infoBorder: '#2563EB',
+  infoBorder: '#3B82F6',
 
   draft: '#94A3B8',
-  draftLight: '#1C2E25',
-  draftBorder: '#283C31',
+  draftLight: '#1A2720',
+  draftBorder: '#223429',
 
   offline: '#F59E0B',
   offlineLight: '#3D2D10',
@@ -146,15 +146,15 @@ export const darkColors = {
   // Crop Visual Accent Colors
   cropMaize: '#F59E0B',
   cropBeans: '#F87171',
-  cropRice: '#3FA379',
+  cropRice: '#34D399',
   cropSoybeans: '#4ADE80',
   cropPotatoes: '#FBBF24',
   cropCoffee: '#D97706',
   cropCassava: '#2DD4BF',
 };
 
-// Default exported colors (for backwards compatibility)
-export const colors = lightColors;
+// Default exported colors (mutable clone for live dynamic updates)
+export const colors = { ...lightColors };
 
 export const typography = {
   h1: {

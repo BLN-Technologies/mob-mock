@@ -1,8 +1,9 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import React, { useState, useMemo, useRef } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, PanResponder } from 'react-native';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { colors, radii, typography, spacing } from '../../theme/tokens';
+import { radii, typography, spacing } from '../../theme/tokens';
+import { useTheme } from '../../theme/ThemeContext';
 import { useTranslation } from '../../i18n';
 import { SplashScreen } from '../bootstrap/SplashScreen';
 import { TopAppBar } from '../../components/navigation/TopAppBar';
@@ -42,7 +43,7 @@ import { NotificationInboxScreen } from '../../features/notifications/Notificati
 import { ProfileScreen } from '../../features/profile/ProfileScreen';
 
 import { UserRole, LotStatus } from '../../domain/enums';
-import { User, Lot, Organization, BuyerLotProjection, Order, WarehouseStockGroup } from '../../domain/models';
+import { User, Lot, Organization, BuyerLotProjection, Order } from '../../domain/models';
 
 type AuthFlowStep =
   | 'welcome'
@@ -55,7 +56,8 @@ type AuthFlowStep =
   | 'onboarding_agent';
 
 export const RootNavigator: React.FC = () => {
-  const { t } = useTranslation();
+  const { t, language } = useTranslation();
+  const { colors: tc, isDark } = useTheme();
   const [bootstrapping, setBootstrapping] = useState(true);
   const [currentUser, setCurrentUser] = useState<User | null>(null);
 
@@ -65,6 +67,63 @@ export const RootNavigator: React.FC = () => {
 
   // Active Tab state for each role
   const [activeTab, setActiveTab] = useState<string>('home');
+  const activeTabRef = useRef(activeTab);
+  activeTabRef.current = activeTab;
+
+  const insets = useSafeAreaInsets();
+  const tabBottomPadding = Math.max(insets.bottom, 10);
+  const tabBarHeight = 56 + tabBottomPadding;
+
+  const getRoleTabs = (role: UserRole | string): string[] => {
+    if (role === UserRole.BUYER) {
+      return ['home', 'catalogue', 'orders', 'profile'];
+    }
+    if (role === UserRole.SUPPLIER) {
+      return ['home', 'lots', 'orders', 'profile'];
+    }
+    if (role === UserRole.FIELD_AGENT || (role as any) === 'FIELD_INSPECTOR') {
+      return ['home', 'tasks', 'profile'];
+    }
+    return ['home', 'profile'];
+  };
+
+  const createSwipeResponder = (role: UserRole | string) => {
+    return PanResponder.create({
+      onStartShouldSetPanResponder: () => false,
+      onMoveShouldSetPanResponder: (_, gestureState) => {
+        return Math.abs(gestureState.dx) > 40 && Math.abs(gestureState.dy) < 25;
+      },
+      onPanResponderRelease: (_, gestureState) => {
+        const tabs = getRoleTabs(role);
+        const currentIndex = tabs.indexOf(activeTabRef.current);
+        if (currentIndex === -1) return;
+
+        if (gestureState.dx < -50 && Math.abs(gestureState.dy) < 60) {
+          if (currentIndex < tabs.length - 1) {
+            setActiveTab(tabs[currentIndex + 1]);
+          }
+        } else if (gestureState.dx > 50 && Math.abs(gestureState.dy) < 60) {
+          if (currentIndex > 0) {
+            setActiveTab(tabs[currentIndex - 1]);
+          }
+        }
+      },
+      onPanResponderTerminate: () => {},
+    });
+  };
+
+  const supplierSwipeResponder = useMemo(
+    () => createSwipeResponder(UserRole.SUPPLIER),
+    []
+  );
+  const agentSwipeResponder = useMemo(
+    () => createSwipeResponder(UserRole.FIELD_AGENT),
+    []
+  );
+  const buyerSwipeResponder = useMemo(
+    () => createSwipeResponder(UserRole.BUYER),
+    []
+  );
 
   // Supplier flow modals / drilldowns
   const [showCreateLot, setShowCreateLot] = useState(false);
@@ -76,7 +135,6 @@ export const RootNavigator: React.FC = () => {
   const [showCreateRequest, setShowCreateRequest] = useState(false);
   const [selectedBuyerLot, setSelectedBuyerLot] = useState<BuyerLotProjection | null>(null);
   const [selectedBuyerOrder, setSelectedBuyerOrder] = useState<Order | null>(null);
-  const [showSearchCatalogue, setShowSearchCatalogue] = useState(false);
 
   const handleLogout = async () => {
     await authService.logout();
@@ -84,7 +142,6 @@ export const RootNavigator: React.FC = () => {
     setNewlyRegisteredUser(null);
     setAuthFlowStep('welcome');
     setActiveTab('home');
-    setShowSearchCatalogue(false);
     setSelectedBuyerLot(null);
     setSelectedBuyerOrder(null);
     setShowCreateRequest(false);
@@ -235,6 +292,7 @@ export const RootNavigator: React.FC = () => {
             } else {
               setCurrentUser(user);
               if (route.initialTab) setActiveTab(route.initialTab);
+              else setActiveTab('home');
             }
           }}
           onNavigateToRegister={() => setAuthFlowStep('register')}
@@ -270,6 +328,8 @@ export const RootNavigator: React.FC = () => {
         return t.tabs.home;
       case 'lots':
         return t.tabs.lots;
+      case 'catalogue':
+        return language === 'rw' ? 'Shakisha Umusaruro' : 'For You (Discover)';
       case 'orders':
         return t.tabs.orders;
       case 'tasks':
@@ -287,7 +347,7 @@ export const RootNavigator: React.FC = () => {
   if (currentUser.role === UserRole.SUPPLIER) {
     if (showCreateLot) {
       return (
-        <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right']}>
+        <SafeAreaView style={[styles.safeArea, { backgroundColor: tc.surface }]} edges={['top', 'left', 'right']}>
           <TopAppBar
             title={t.supplier.declareHarvestTitle}
             showBack
@@ -306,7 +366,7 @@ export const RootNavigator: React.FC = () => {
     }
 
     return (
-      <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right']}>
+      <SafeAreaView style={[styles.safeArea, { backgroundColor: tc.surface }]} edges={['top', 'left', 'right']}>
         <TopAppBar
           title={getTabTitle()}
           user={currentUser}
@@ -314,7 +374,7 @@ export const RootNavigator: React.FC = () => {
           onProfilePress={() => setActiveTab('profile')}
         />
 
-        <View style={styles.screenContainer}>
+        <View style={[styles.screenContainer, { backgroundColor: tc.background }]} {...supplierSwipeResponder.panHandlers}>
           {activeTab === 'home' && (
             <SupplierHomeScreen
               user={currentUser}
@@ -346,7 +406,17 @@ export const RootNavigator: React.FC = () => {
         </View>
 
         {/* Supplier Bottom Tab Bar: Home · Lots · Orders · Profile */}
-        <View style={styles.tabBar}>
+        <View
+          style={[
+            styles.tabBar,
+            {
+              backgroundColor: tc.surface,
+              borderTopColor: tc.borderLight,
+              height: tabBarHeight,
+              paddingBottom: tabBottomPadding,
+            },
+          ]}
+        >
           <TouchableOpacity
             style={[styles.tabItem, activeTab === 'home' && styles.tabItemActive]}
             onPress={() => setActiveTab('home')}
@@ -356,10 +426,14 @@ export const RootNavigator: React.FC = () => {
             <Ionicons
               name={activeTab === 'home' ? 'home' : 'home-outline'}
               size={20}
-              color={activeTab === 'home' ? colors.primary : colors.neutralLight}
+              color={activeTab === 'home' ? tc.primary : tc.neutralGray}
             />
             <Text
-              style={[styles.tabLabel, activeTab === 'home' && styles.tabLabelActive]}
+              style={[
+                styles.tabLabel,
+                { color: activeTab === 'home' ? tc.primary : tc.neutralGray },
+                activeTab === 'home' && styles.tabLabelActive,
+              ]}
               numberOfLines={1}
             >
               {t.tabs.home}
@@ -375,10 +449,14 @@ export const RootNavigator: React.FC = () => {
             <Ionicons
               name={activeTab === 'lots' ? 'cube' : 'cube-outline'}
               size={20}
-              color={activeTab === 'lots' ? colors.primary : colors.neutralLight}
+              color={activeTab === 'lots' ? tc.primary : tc.neutralGray}
             />
             <Text
-              style={[styles.tabLabel, activeTab === 'lots' && styles.tabLabelActive]}
+              style={[
+                styles.tabLabel,
+                { color: activeTab === 'lots' ? tc.primary : tc.neutralGray },
+                activeTab === 'lots' && styles.tabLabelActive,
+              ]}
               numberOfLines={1}
             >
               {t.tabs.lots}
@@ -394,10 +472,14 @@ export const RootNavigator: React.FC = () => {
             <Ionicons
               name={activeTab === 'orders' ? 'cart' : 'cart-outline'}
               size={20}
-              color={activeTab === 'orders' ? colors.primary : colors.neutralLight}
+              color={activeTab === 'orders' ? tc.primary : tc.neutralGray}
             />
             <Text
-              style={[styles.tabLabel, activeTab === 'orders' && styles.tabLabelActive]}
+              style={[
+                styles.tabLabel,
+                { color: activeTab === 'orders' ? tc.primary : tc.neutralGray },
+                activeTab === 'orders' && styles.tabLabelActive,
+              ]}
               numberOfLines={1}
             >
               {t.tabs.orders}
@@ -413,10 +495,14 @@ export const RootNavigator: React.FC = () => {
             <Ionicons
               name={activeTab === 'profile' ? 'person' : 'person-outline'}
               size={20}
-              color={activeTab === 'profile' ? colors.primary : colors.neutralLight}
+              color={activeTab === 'profile' ? tc.primary : tc.neutralGray}
             />
             <Text
-              style={[styles.tabLabel, activeTab === 'profile' && styles.tabLabelActive]}
+              style={[
+                styles.tabLabel,
+                { color: activeTab === 'profile' ? tc.primary : tc.neutralGray },
+                activeTab === 'profile' && styles.tabLabelActive,
+              ]}
               numberOfLines={1}
             >
               {t.tabs.profile}
@@ -431,7 +517,7 @@ export const RootNavigator: React.FC = () => {
   if (currentUser.role === UserRole.FIELD_AGENT || (currentUser.role as any) === 'FIELD_INSPECTOR') {
     if (activeTask) {
       return (
-        <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right']}>
+        <SafeAreaView style={[styles.safeArea, { backgroundColor: tc.surface }]} edges={['top', 'left', 'right']}>
           <TopAppBar
             title={t.agent.inspectionTask}
             showBack
@@ -452,7 +538,7 @@ export const RootNavigator: React.FC = () => {
     }
 
     return (
-      <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right']}>
+      <SafeAreaView style={[styles.safeArea, { backgroundColor: tc.surface }]} edges={['top', 'left', 'right']}>
         <TopAppBar
           title={getTabTitle()}
           user={currentUser}
@@ -460,7 +546,7 @@ export const RootNavigator: React.FC = () => {
           onProfilePress={() => setActiveTab('profile')}
         />
 
-        <View style={styles.screenContainer}>
+        <View style={[styles.screenContainer, { backgroundColor: tc.background }]} {...agentSwipeResponder.panHandlers}>
           {activeTab === 'home' && (
             <AgentTasksScreen
               onSelectTask={(lot, org) => setActiveTask({ lot, org })}
@@ -483,7 +569,17 @@ export const RootNavigator: React.FC = () => {
         </View>
 
         {/* Inspector Bottom Tab Bar: Home · Tasks/Queue · Profile */}
-        <View style={styles.tabBar}>
+        <View
+          style={[
+            styles.tabBar,
+            {
+              backgroundColor: tc.surface,
+              borderTopColor: tc.borderLight,
+              height: tabBarHeight,
+              paddingBottom: tabBottomPadding,
+            },
+          ]}
+        >
           <TouchableOpacity
             style={[styles.tabItem, activeTab === 'home' && styles.tabItemActive]}
             onPress={() => setActiveTab('home')}
@@ -493,10 +589,14 @@ export const RootNavigator: React.FC = () => {
             <Ionicons
               name={activeTab === 'home' ? 'clipboard' : 'clipboard-outline'}
               size={20}
-              color={activeTab === 'home' ? colors.primary : colors.neutralLight}
+              color={activeTab === 'home' ? tc.primary : tc.neutralGray}
             />
             <Text
-              style={[styles.tabLabel, activeTab === 'home' && styles.tabLabelActive]}
+              style={[
+                styles.tabLabel,
+                { color: activeTab === 'home' ? tc.primary : tc.neutralGray },
+                activeTab === 'home' && styles.tabLabelActive,
+              ]}
               numberOfLines={1}
             >
               Tasks
@@ -512,10 +612,14 @@ export const RootNavigator: React.FC = () => {
             <Ionicons
               name={activeTab === 'tasks' ? 'cloud-done' : 'cloud-offline-outline'}
               size={20}
-              color={activeTab === 'tasks' ? colors.primary : colors.neutralLight}
+              color={activeTab === 'tasks' ? tc.primary : tc.neutralGray}
             />
             <Text
-              style={[styles.tabLabel, activeTab === 'tasks' && styles.tabLabelActive]}
+              style={[
+                styles.tabLabel,
+                { color: activeTab === 'tasks' ? tc.primary : tc.neutralGray },
+                activeTab === 'tasks' && styles.tabLabelActive,
+              ]}
               numberOfLines={1}
             >
               Sync Queue
@@ -531,10 +635,14 @@ export const RootNavigator: React.FC = () => {
             <Ionicons
               name={activeTab === 'profile' ? 'person' : 'person-outline'}
               size={20}
-              color={activeTab === 'profile' ? colors.primary : colors.neutralLight}
+              color={activeTab === 'profile' ? tc.primary : tc.neutralGray}
             />
             <Text
-              style={[styles.tabLabel, activeTab === 'profile' && styles.tabLabelActive]}
+              style={[
+                styles.tabLabel,
+                { color: activeTab === 'profile' ? tc.primary : tc.neutralGray },
+                activeTab === 'profile' && styles.tabLabelActive,
+              ]}
               numberOfLines={1}
             >
               {t.tabs.profile}
@@ -545,13 +653,13 @@ export const RootNavigator: React.FC = () => {
     );
   }
 
-  // 4. Buyer Navigation Shell: Home · Orders · Profile
+  // 4. Buyer Navigation Shell: Home · For You (Discover) · Orders · Profile
   if (currentUser.role === UserRole.BUYER) {
     if (showCreateRequest) {
       return (
-        <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right']}>
+        <SafeAreaView style={[styles.safeArea, { backgroundColor: tc.surface }]} edges={['top', 'left', 'right']}>
           <TopAppBar
-            title="Request Stock"
+            title="Request Custom Stock"
             showBack
             onBack={() => setShowCreateRequest(false)}
           />
@@ -564,28 +672,9 @@ export const RootNavigator: React.FC = () => {
       );
     }
 
-    if (showSearchCatalogue) {
-      return (
-        <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right']}>
-          <TopAppBar
-            title="Search & Discover"
-            showBack
-            onBack={() => setShowSearchCatalogue(false)}
-          />
-          <BuyerCatalogueScreen
-            onNavigateToCreateRequest={() => {
-              setShowSearchCatalogue(false);
-              setShowCreateRequest(true);
-            }}
-            onSelectLot={lot => setSelectedBuyerLot(lot)}
-          />
-        </SafeAreaView>
-      );
-    }
-
     if (selectedBuyerLot) {
       return (
-        <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right']}>
+        <SafeAreaView style={[styles.safeArea, { backgroundColor: tc.surface }]} edges={['top', 'left', 'right']}>
           <TopAppBar
             title={selectedBuyerLot.cropName}
             showBack
@@ -606,7 +695,7 @@ export const RootNavigator: React.FC = () => {
 
     if (selectedBuyerOrder) {
       return (
-        <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right']}>
+        <SafeAreaView style={[styles.safeArea, { backgroundColor: tc.surface }]} edges={['top', 'left', 'right']}>
           <TopAppBar
             title={selectedBuyerOrder.orderNumber}
             showBack
@@ -623,7 +712,7 @@ export const RootNavigator: React.FC = () => {
     }
 
     return (
-      <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right']}>
+      <SafeAreaView style={[styles.safeArea, { backgroundColor: tc.surface }]} edges={['top', 'left', 'right']}>
         <TopAppBar
           title={getTabTitle()}
           user={currentUser}
@@ -631,11 +720,11 @@ export const RootNavigator: React.FC = () => {
           onProfilePress={() => setActiveTab('profile')}
         />
 
-        <View style={styles.screenContainer}>
+        <View style={[styles.screenContainer, { backgroundColor: tc.background }]} {...buyerSwipeResponder.panHandlers}>
           {activeTab === 'home' && (
             <BuyerHomeScreen
               user={currentUser}
-              onNavigateToSearch={() => setShowSearchCatalogue(true)}
+              onNavigateToSearch={() => setActiveTab('catalogue')}
               onSelectStockGroup={group => {
                 const projected: BuyerLotProjection = {
                   id: group.id,
@@ -654,16 +743,21 @@ export const RootNavigator: React.FC = () => {
                 };
                 setSelectedBuyerLot(projected);
               }}
-              onNavigateToRequestStock={() => setShowCreateRequest(true)}
               onNavigateToOrders={() => setActiveTab('orders')}
               onSelectOrder={ord => setSelectedBuyerOrder(ord)}
+            />
+          )}
+          {activeTab === 'catalogue' && (
+            <BuyerCatalogueScreen
+              onNavigateToCreateRequest={() => setShowCreateRequest(true)}
+              onSelectLot={lot => setSelectedBuyerLot(lot)}
             />
           )}
           {activeTab === 'orders' && (
             <BuyerOrdersListScreen
               user={currentUser}
               onSelectOrder={ord => setSelectedBuyerOrder(ord)}
-              onNavigateToCatalogue={() => setShowSearchCatalogue(true)}
+              onNavigateToCatalogue={() => setActiveTab('catalogue')}
             />
           )}
           {activeTab === 'notifications' && (
@@ -679,8 +773,18 @@ export const RootNavigator: React.FC = () => {
           )}
         </View>
 
-        {/* Buyer Bottom Tab Bar: Home · Orders · Profile */}
-        <View style={styles.tabBar}>
+        {/* Buyer Bottom Tab Bar: Home · For You (Discover) · Orders · Profile */}
+        <View
+          style={[
+            styles.tabBar,
+            {
+              backgroundColor: tc.surface,
+              borderTopColor: tc.borderLight,
+              height: tabBarHeight,
+              paddingBottom: tabBottomPadding,
+            },
+          ]}
+        >
           <TouchableOpacity
             style={[styles.tabItem, activeTab === 'home' && styles.tabItemActive]}
             onPress={() => setActiveTab('home')}
@@ -690,13 +794,40 @@ export const RootNavigator: React.FC = () => {
             <Ionicons
               name={activeTab === 'home' ? 'home' : 'home-outline'}
               size={20}
-              color={activeTab === 'home' ? colors.primary : colors.neutralLight}
+              color={activeTab === 'home' ? tc.primary : tc.neutralGray}
             />
             <Text
-              style={[styles.tabLabel, activeTab === 'home' && styles.tabLabelActive]}
+              style={[
+                styles.tabLabel,
+                { color: activeTab === 'home' ? tc.primary : tc.neutralGray },
+                activeTab === 'home' && styles.tabLabelActive,
+              ]}
               numberOfLines={1}
             >
               {t.tabs.home}
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.tabItem, activeTab === 'catalogue' && styles.tabItemActive]}
+            onPress={() => setActiveTab('catalogue')}
+            activeOpacity={0.8}
+            accessibilityRole="tab"
+          >
+            <Ionicons
+              name={activeTab === 'catalogue' ? 'sparkles' : 'sparkles-outline'}
+              size={20}
+              color={activeTab === 'catalogue' ? tc.primary : tc.neutralGray}
+            />
+            <Text
+              style={[
+                styles.tabLabel,
+                { color: activeTab === 'catalogue' ? tc.primary : tc.neutralGray },
+                activeTab === 'catalogue' && styles.tabLabelActive,
+              ]}
+              numberOfLines={1}
+            >
+              {language === 'rw' ? 'Shakisha' : 'For You'}
             </Text>
           </TouchableOpacity>
 
@@ -709,10 +840,14 @@ export const RootNavigator: React.FC = () => {
             <Ionicons
               name={activeTab === 'orders' ? 'cart' : 'cart-outline'}
               size={20}
-              color={activeTab === 'orders' ? colors.primary : colors.neutralLight}
+              color={activeTab === 'orders' ? tc.primary : tc.neutralGray}
             />
             <Text
-              style={[styles.tabLabel, activeTab === 'orders' && styles.tabLabelActive]}
+              style={[
+                styles.tabLabel,
+                { color: activeTab === 'orders' ? tc.primary : tc.neutralGray },
+                activeTab === 'orders' && styles.tabLabelActive,
+              ]}
               numberOfLines={1}
             >
               {t.tabs.orders}
@@ -728,10 +863,14 @@ export const RootNavigator: React.FC = () => {
             <Ionicons
               name={activeTab === 'profile' ? 'person' : 'person-outline'}
               size={20}
-              color={activeTab === 'profile' ? colors.primary : colors.neutralLight}
+              color={activeTab === 'profile' ? tc.primary : tc.neutralGray}
             />
             <Text
-              style={[styles.tabLabel, activeTab === 'profile' && styles.tabLabelActive]}
+              style={[
+                styles.tabLabel,
+                { color: activeTab === 'profile' ? tc.primary : tc.neutralGray },
+                activeTab === 'profile' && styles.tabLabelActive,
+              ]}
               numberOfLines={1}
             >
               {t.tabs.profile}
@@ -748,21 +887,15 @@ export const RootNavigator: React.FC = () => {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
   },
   screenContainer: {
     flex: 1,
-    backgroundColor: colors.background,
   },
   tabBar: {
-    height: 64,
-    backgroundColor: '#FFFFFF',
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-around',
     borderTopWidth: 1,
-    borderTopColor: colors.borderLight,
-    paddingBottom: 4,
   },
   tabItem: {
     flex: 1,
@@ -771,17 +904,15 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
   },
   tabItemActive: {
-    // subtle active indicator
+    // Active styling handled inline
   },
   tabLabel: {
     ...typography.caption,
     fontSize: 11,
-    color: colors.neutralLight,
     marginTop: 2,
     fontWeight: '500',
   },
   tabLabelActive: {
-    color: colors.primary,
-    fontWeight: 'bold',
+    fontWeight: '700',
   },
 });

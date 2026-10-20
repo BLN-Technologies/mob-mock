@@ -13,6 +13,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { colors, radii, shadows, typography, spacing } from '../../theme/tokens';
 import { useTranslation } from '../../i18n';
+import { useTheme } from '../../theme/ThemeContext';
 import { Card } from '../../components/ui/Card';
 import { StatusBadge } from '../../components/ui/StatusBadge';
 import { CropBadge } from '../../components/ui/CropBadge';
@@ -24,7 +25,7 @@ import { formatRwf, formatQuantity } from '../../domain/calculations/lotCalculat
 import { BuyerLotProjection } from '../../domain/models';
 
 interface BuyerCatalogueScreenProps {
-  onNavigateToCreateRequest: () => void;
+  onNavigateToCreateRequest?: () => void;
   onSelectLot: (lot: BuyerLotProjection) => void;
 }
 
@@ -33,6 +34,7 @@ export const BuyerCatalogueScreen: React.FC<BuyerCatalogueScreenProps> = ({
   onSelectLot,
 }) => {
   const { t } = useTranslation();
+  const { colors: tc, isDark } = useTheme();
   const [lots, setLots] = useState<BuyerLotProjection[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('ALL');
@@ -133,38 +135,31 @@ export const BuyerCatalogueScreen: React.FC<BuyerCatalogueScreenProps> = ({
   }, [lots, searchQuery]);
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor: tc.background }]}>
       {/* 1. Marketplace Header */}
-      <View style={styles.header}>
+      <View style={[styles.header, { backgroundColor: tc.surface, borderBottomColor: tc.borderLight }]}>
         <View style={styles.headerTopRow}>
           <View style={styles.headerTitles}>
             <View style={styles.headerTagRow}>
-              <View style={styles.liveIndicatorDot} />
-              <Text style={styles.headerTagText}>{t.buyer.verifiedBadge}</Text>
+              <View style={[styles.liveIndicatorDot, { backgroundColor: tc.primary }]} />
+              <Text style={[styles.headerTagText, { color: tc.primary }]}>{t.buyer.verifiedBadge}</Text>
             </View>
-            <Text style={styles.title}>{t.buyer.discoverTitle}</Text>
-            <Text style={styles.subtitle} numberOfLines={2}>
+            <Text style={[styles.title, { color: tc.neutralHeadings }]}>{t.buyer.discoverTitle}</Text>
+            <Text style={[styles.subtitle, { color: tc.neutralGray }]} numberOfLines={2}>
               {t.buyer.discoverSubtitle}
             </Text>
           </View>
-          <Button
-            title={t.buyer.postRequest}
-            onPress={onNavigateToCreateRequest}
-            icon={<Ionicons name="add" size={16} color="#FFFFFF" />}
-            size="small"
-            style={styles.postRequestBtn}
-          />
         </View>
 
         {/* 2. Interactive Search Bar */}
-        <View style={styles.searchBar}>
-          <Ionicons name="search" size={18} color={colors.neutralGray} style={styles.searchIcon} />
+        <View style={[styles.searchBar, { backgroundColor: tc.surfaceSubtle, borderColor: tc.borderLight }]}>
+          <Ionicons name="search" size={18} color={tc.neutralGray} style={styles.searchIcon} />
           <TextInput
             value={searchQuery}
             onChangeText={setSearchQuery}
             placeholder={t.buyer.searchPlaceholder}
-            placeholderTextColor="#94A3B8"
-            style={styles.searchInput}
+            placeholderTextColor={tc.neutralGray}
+            style={[styles.searchInput, { color: tc.neutralDark }]}
             returnKeyType="search"
             accessibilityLabel={t.buyer.searchPlaceholder}
           />
@@ -195,17 +190,31 @@ export const BuyerCatalogueScreen: React.FC<BuyerCatalogueScreenProps> = ({
                 key={cat.key}
                 onPress={() => setSelectedCategory(cat.key)}
                 activeOpacity={0.75}
-                style={[styles.categoryChip, isSelected && styles.categoryChipActive]}
+                style={[
+                  styles.categoryChip,
+                  {
+                    backgroundColor: isSelected ? tc.primary : tc.surfaceSubtle,
+                    borderColor: isSelected ? tc.primary : tc.borderLight,
+                  },
+                ]}
                 accessibilityRole="button"
                 accessibilityState={{ selected: isSelected }}
               >
                 <Ionicons
                   name={cat.icon}
                   size={14}
-                  color={isSelected ? '#FFFFFF' : colors.neutralHeadings}
+                  color={isSelected ? '#FFFFFF' : tc.neutralHeadings}
                   style={styles.categoryIcon}
                 />
-                <Text style={[styles.categoryChipText, isSelected && styles.categoryChipTextActive]}>
+                <Text
+                  style={[
+                    styles.categoryChipText,
+                    {
+                      color: isSelected ? '#FFFFFF' : tc.neutralHeadings,
+                      fontWeight: isSelected ? '700' : '600',
+                    },
+                  ]}
+                >
                   {cat.label}
                 </Text>
               </TouchableOpacity>
@@ -215,10 +224,16 @@ export const BuyerCatalogueScreen: React.FC<BuyerCatalogueScreenProps> = ({
       </View>
 
       {/* 4. Filter & Controls Bar */}
-      <View style={styles.controlsBar}>
+      <View style={[styles.controlsBar, { backgroundColor: tc.surface, borderBottomColor: tc.borderLight }]}>
         <View style={styles.controlsLeft}>
           <TouchableOpacity
-            style={[styles.filterTrigger, activeFilterCount > 0 && styles.filterTriggerActive]}
+            style={[
+              styles.filterTrigger,
+              {
+                backgroundColor: activeFilterCount > 0 ? tc.primary : tc.surfaceSubtle,
+                borderColor: activeFilterCount > 0 ? tc.primary : tc.borderLight,
+              },
+            ]}
             onPress={openFilterModal}
             activeOpacity={0.75}
             accessibilityRole="button"
@@ -227,32 +242,32 @@ export const BuyerCatalogueScreen: React.FC<BuyerCatalogueScreenProps> = ({
             <Ionicons
               name="options-outline"
               size={16}
-              color={activeFilterCount > 0 ? '#FFFFFF' : colors.neutralHeadings}
+              color={activeFilterCount > 0 ? '#FFFFFF' : tc.neutralHeadings}
             />
             <Text
               style={[
                 styles.filterTriggerText,
-                activeFilterCount > 0 && styles.filterTriggerTextActive,
+                { color: activeFilterCount > 0 ? '#FFFFFF' : tc.neutralHeadings },
               ]}
             >
               {t.buyer.filterButton}
             </Text>
             {activeFilterCount > 0 && (
-              <View style={styles.activeFilterBadge}>
-                <Text style={styles.activeFilterBadgeText}>{activeFilterCount}</Text>
+              <View style={[styles.activeFilterBadge, { backgroundColor: '#FFFFFF' }]}>
+                <Text style={[styles.activeFilterBadgeText, { color: tc.primary }]}>{activeFilterCount}</Text>
               </View>
             )}
           </TouchableOpacity>
 
-          <Text style={styles.resultsCountText}>
+          <Text style={[styles.resultsCountText, { color: tc.neutralGray }]}>
             {lots.length} {t.buyer.resultsCount}
           </Text>
         </View>
 
         {/* View Mode Toggle (List vs Grid) */}
-        <View style={styles.viewToggleGroup}>
+        <View style={[styles.viewToggleGroup, { backgroundColor: tc.surfaceSubtle, borderColor: tc.borderLight }]}>
           <TouchableOpacity
-            style={[styles.viewToggleBtn, viewMode === 'list' && styles.viewToggleBtnActive]}
+            style={[styles.viewToggleBtn, viewMode === 'list' && { backgroundColor: tc.surfaceCard }]}
             onPress={() => setViewMode('list')}
             activeOpacity={0.75}
             accessibilityRole="button"
@@ -261,11 +276,11 @@ export const BuyerCatalogueScreen: React.FC<BuyerCatalogueScreenProps> = ({
             <Ionicons
               name="list"
               size={16}
-              color={viewMode === 'list' ? colors.primary : colors.neutralGray}
+              color={viewMode === 'list' ? tc.primary : tc.neutralGray}
             />
           </TouchableOpacity>
           <TouchableOpacity
-            style={[styles.viewToggleBtn, viewMode === 'grid' && styles.viewToggleBtnActive]}
+            style={[styles.viewToggleBtn, viewMode === 'grid' && { backgroundColor: tc.surfaceCard }]}
             onPress={() => setViewMode('grid')}
             activeOpacity={0.75}
             accessibilityRole="button"
@@ -273,8 +288,8 @@ export const BuyerCatalogueScreen: React.FC<BuyerCatalogueScreenProps> = ({
           >
             <Ionicons
               name="grid"
-              size={15}
-              color={viewMode === 'grid' ? colors.primary : colors.neutralGray}
+              size={16}
+              color={viewMode === 'grid' ? tc.primary : tc.neutralGray}
             />
           </TouchableOpacity>
         </View>

@@ -233,67 +233,52 @@ export const CreateLotWizard: React.FC<CreateLotWizardProps> = ({
       {/* STEP 1: Product & Pricing */}
       {step === 1 && (
         <View style={styles.stepContainer}>
-          <Text style={styles.sectionLabel}>
-            {language === 'rw' ? 'Hitamo Umusaruro:' : 'Select Common Commodity:'}
-          </Text>
+          {/* Crop Name input field */}
+          <View style={styles.fieldGroup}>
+            <Text style={styles.fieldLabel}>
+              {language === 'rw' ? 'Izina ry\'Igihingwa (Crop Name):' : 'Crop Name:'}
+            </Text>
+            <TextInput
+              style={styles.input}
+              value={cropName}
+              onChangeText={text => {
+                setCropName(text);
+                const lower = text.toLowerCase();
+                if (lower.includes('tomato') || lower.includes('avocado') || lower.includes('banana') || lower.includes('mango')) {
+                  setCropType('PERISHABLE');
+                } else {
+                  setCropType('NON_PERISHABLE');
+                }
+              }}
+              placeholder={language === 'rw' ? 'Urugero: Ibigori, Ibishyimbo, Umuceri...' : 'e.g. Maize, Yellow Beans, Rice, Potatoes...'}
+              placeholderTextColor="#94A3B8"
+            />
+          </View>
+
+          {/* Quick suggestions chips */}
           <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.cropSelectorRow}>
-            {COMMON_CROPS.map(c => {
-              const isSelected = cropName.toLowerCase() === c.name.toLowerCase();
+            {['Maize', 'Dry Beans', 'Irish Potatoes', 'Rice', 'Soybeans', 'Coffee', 'Tomatoes'].map(name => {
+              const isSelected = cropName.toLowerCase() === name.toLowerCase();
               return (
                 <TouchableOpacity
-                  key={c.name}
+                  key={name}
                   style={[styles.cropChip, isSelected && styles.cropChipActive]}
                   onPress={() => {
-                    setCropName(c.name);
-                    setVariety(c.variety);
-                    setCropType(c.type);
+                    setCropName(name);
+                    const lower = name.toLowerCase();
+                    if (lower.includes('tomato')) setCropType('PERISHABLE');
+                    else setCropType('NON_PERISHABLE');
                   }}
                   activeOpacity={0.8}
                 >
-                  <CropBadge cropName={c.name} size="small" />
+                  <CropBadge cropName={name} size="small" />
                   <Text style={[styles.cropChipText, isSelected && styles.cropChipTextActive]}>
-                    {c.name}
+                    {name}
                   </Text>
                 </TouchableOpacity>
               );
             })}
           </ScrollView>
-
-          {/* Crop Type Selector (Perishable / Non-perishable) */}
-          <View style={styles.fieldGroup}>
-            <Text style={styles.fieldLabel}>
-              {language === 'rw' ? 'Ubwoko bw\'Umusaruro (Perishable):' : 'Perishability Classification:'}
-            </Text>
-            <View style={styles.typeSelectorRow}>
-              <TouchableOpacity
-                style={[styles.typeOption, cropType === 'NON_PERISHABLE' && styles.typeOptionActive]}
-                onPress={() => setCropType('NON_PERISHABLE')}
-              >
-                <Ionicons
-                  name="cube-outline"
-                  size={16}
-                  color={cropType === 'NON_PERISHABLE' ? '#FFFFFF' : '#174A35'}
-                />
-                <Text style={[styles.typeOptionText, cropType === 'NON_PERISHABLE' && styles.typeOptionTextActive]}>
-                  {language === 'rw' ? 'Udadabora Byoroshye (Non-perishable)' : 'Non-perishable (Grains / Beans)'}
-                </Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={[styles.typeOption, cropType === 'PERISHABLE' && styles.typeOptionActive]}
-                onPress={() => setCropType('PERISHABLE')}
-              >
-                <Ionicons
-                  name="leaf-outline"
-                  size={16}
-                  color={cropType === 'PERISHABLE' ? '#FFFFFF' : '#174A35'}
-                />
-                <Text style={[styles.typeOptionText, cropType === 'PERISHABLE' && styles.typeOptionTextActive]}>
-                  {language === 'rw' ? 'Ubora Byoroshye (Perishable)' : 'Perishable (Produce / Vegetables)'}
-                </Text>
-              </TouchableOpacity>
-            </View>
-          </View>
 
           {/* Variety */}
           <View style={styles.fieldGroup}>

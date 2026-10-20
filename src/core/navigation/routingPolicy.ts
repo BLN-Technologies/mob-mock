@@ -129,7 +129,7 @@ export function resolveAuthenticatedRoute(
     }
     return {
       destination: 'BUYER_WORKSPACE',
-      initialTab: 'catalogue',
+      initialTab: 'home',
       requiresOnboarding: false,
       isVerificationPending: false,
     };
@@ -146,7 +146,7 @@ export function resolveAuthenticatedRoute(
     }
     return {
       destination: 'AGENT_WORKSPACE',
-      initialTab: 'tasks',
+      initialTab: 'home',
       requiresOnboarding: false,
       isVerificationPending: false,
     };

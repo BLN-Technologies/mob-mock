@@ -9,7 +9,6 @@ import { inspectionRepository } from '../../data/local/inspectionRepository';
 import { mockSyncAdapter, ISyncAdapter } from './syncAdapter';
 import { GradingRecord, OfflineQueueItem, User } from '../../domain/models';
 import { SyncStatus, SyncErrorCategory } from '../../domain/enums';
-import { mockState } from '../mock/mockServices';
 
 export interface QueueSummary {
   total: number;

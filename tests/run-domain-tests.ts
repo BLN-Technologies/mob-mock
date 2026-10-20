@@ -699,7 +699,7 @@ async function runAllTests() {
       onboardingCompleted: true,
     };
     const buyRoute = resolveAuthenticatedRoute(completedBuyer);
-    assert(buyRoute.destination === 'BUYER_WORKSPACE' && buyRoute.initialTab === 'catalogue', 'Completed onboarding buyer routes to BUYER_WORKSPACE');
+    assert(buyRoute.destination === 'BUYER_WORKSPACE' && buyRoute.initialTab === 'home', 'Completed onboarding buyer routes to BUYER_WORKSPACE');
 
     // Agent onboarding pending vs complete
     const pendingAgent: User = {
@@ -715,7 +715,7 @@ async function runAllTests() {
       onboardingCompleted: true,
     };
     const agtRoute = resolveAuthenticatedRoute(completedAgent);
-    assert(agtRoute.destination === 'AGENT_WORKSPACE' && agtRoute.initialTab === 'tasks', 'Completed onboarding agent routes to AGENT_WORKSPACE');
+    assert(agtRoute.destination === 'AGENT_WORKSPACE' && agtRoute.initialTab === 'home', 'Completed onboarding agent routes to AGENT_WORKSPACE');
 
     // Access control guards
     assert(canAccessDestination('SUPPLIER_WORKSPACE', completedSupplier), 'Supplier can access SUPPLIER_WORKSPACE');
